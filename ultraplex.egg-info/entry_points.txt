@@ -1,0 +1,3 @@
+[console_scripts]
+ultraplex = ultraplex.__main__:main
+
