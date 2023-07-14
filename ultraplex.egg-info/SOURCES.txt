@@ -7,8 +7,14 @@ logo2.png
 setup.py
 test_demux.fq.gz
 ultraplex-full.png
-ultraplex_demux_5bc_no_match_tmp_thread_0.fastq
+ultraplex_1689369121.466796.log
+ultraplex_1689369137.528246.log
+ultraplex_demux_5bc_GTCAAGCACATCTACACAGTTAGCCGC.fastq.gz
+ultraplex_demux_5bc_GTCCCACTGGAACGACTGTCCCGCATC.fastq.gz
+ultraplex_demux_5bc_TATGCATAGAAATACGTGTTTGTAAGT.fastq.gz
+ultraplex_demux_5bc_no_match.fastq.gz
 uploading_to_servers.info
+dist/ultraplex-1.2.5-py3.6-macosx-10.9-x86_64.egg
 tests/all_simple_tests.readme
 tests/test_simple/all_simple_tests.sh
 tests/test_simple/barcodes_3nt_bc_789.csv

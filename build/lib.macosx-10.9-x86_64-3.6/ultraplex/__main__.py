@@ -17,6 +17,22 @@ from pathlib import Path
 import logging
 from math import log10, floor
 
+def  hamming_distance(seq1, seq2, limit=0):
+    """
+    Returns the Hamming distance between equal-length sequences.
+    :param seq1: first sequence. - str
+    :param seq2: second sequence. - str
+    :param limit: max distance limit before aborting (returning limit + 1).
+    :return: the edit distance.
+    """
+    i = 0
+    sum = 0
+    for i in range(len(seq1)):
+        if seq1[i] != seq2[i]:
+            sum += 1
+        if limit > 0 and sum > limit:
+            return limit + 1
+    return sum
 
 def round_sig(x, sig=2):
     try:
@@ -76,8 +92,11 @@ def score_barcode_for_dict(seq, barcodes, min_score, Ns_removed=False):
         scores = {}
 
         for this_bc in barcodes_no_N:
-            # score the barcode against the read, penalty for N in the read
-            score = sum(a == b for a, b in zip(this_bc, seq))
+            # # score the barcode against the read, penalty for N in the read
+            # score = sum(a == b for a, b in zip(this_bc, seq))
+            # scores[this_bc] = score
+            
+            score = hamming_distance(this_bc, seq)
             scores[this_bc] = score
 
         # Find the best score
