@@ -81,7 +81,7 @@ def score_barcode_for_dict(seq, barcodes, min_score, Ns_removed=False):
             scores[this_bc] = score
 
         # Find the best score
-        best_score = max(scores.values())
+        best_score = min(scores.values())
 
         if best_score < min_score:
             winner = "no_match"

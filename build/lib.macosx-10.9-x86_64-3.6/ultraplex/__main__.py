@@ -16,6 +16,7 @@ import shutil
 from pathlib import Path
 import logging
 from math import log10, floor
+import numpy as np
 
 def  hamming_distance(seq1, seq2, limit=0):
     """
@@ -34,6 +35,49 @@ def  hamming_distance(seq1, seq2, limit=0):
             return limit + 1
     return sum
 
+def subglobal_distance(s2, s1):
+    """
+    Computes the edit distance for a sub-global alignment
+    of a sequence s2 against a sequence s1.
+    Mismatches and indels both score as 1. Overhanging parts of s1 do not count.
+    :param s1: the longer (probe) sequence.
+    :param s2: the shorter sought sequence.
+    :return: the minimum edit distance
+    """
+    xLen = len(s1)
+    yLen = len(s2)
+
+    if xLen < yLen:
+        raise ValueError("Sub-global edit distance is undefined for sequences "
+                         "where the probe is shorter than the aligned sequence.")
+
+    d = np.empty([xLen + 1, yLen + 1], dtype=np.uint32)
+
+    # Initialize array
+    d[:, 0] = 0
+    d[0, :] = np.arange(yLen + 1)
+
+    # Perform DP.
+    for x in range(1, xLen + 1):
+        # Fill matrix.
+        for y in range(1, yLen + 1):
+            d[x, y] = min(d[x - 1, y] + 1, d[x, y - 1] + 1, d[x - 1, y - 1] + int(s1[x - 1] != s2[y - 1]))
+
+    # Find min for sub-global alignment so that all of s2 is covered,
+    # but not necessarily all of s1 sequence.
+    mini = 1000000
+    iPos = 0
+    i = xLen
+    while i > 0:
+        if d[i, yLen] < mini:
+            mini = d[i, yLen]
+            iPos = i
+        i -= 1
+
+    # Return min distance
+    return mini
+
+
 def round_sig(x, sig=2):
     try:
         to_return = round(x, sig - int(floor(log10(abs(x)))) - 1)
@@ -47,6 +91,7 @@ def make_5p_bc_dict(barcodes, min_score, dont_build_reference):
 	this function generates a dictionary that matches each possible sequence
 	from the read with the best 5' barcode
 	"""
+    max_edit_distance = 8
     if dont_build_reference:
         return {"dont_build": True}
     else:
@@ -58,13 +103,16 @@ def make_5p_bc_dict(barcodes, min_score, dont_build_reference):
             assert len(bc.replace("N", "")) == seq_length, "Your experimental barcodes are different lengths."
 
         seqs = make_all_seqs(seq_length)
+        
+        # print(seqs)
+        # print("")
 
         # trim sequences to desired length
         # create dictionary
         barcode_dictionary = {}
 
         for seq in seqs:
-            barcode_dictionary[seq] = score_barcode_for_dict(seq, barcodes, min_score)
+            barcode_dictionary[seq] = score_barcode_for_dict(seq, barcodes, max_edit_distance)
         return barcode_dictionary
 
 
@@ -75,42 +123,51 @@ def remove_Ns_from_barcodes(barcodes):
     return barcodes_no_N
 
 
-def score_barcode_for_dict(seq, barcodes, min_score, Ns_removed=False):
+def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
     """
 	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
 	"""
 
+    # print(max_edit_distance)
     if not Ns_removed:
         barcodes = remove_Ns_from_barcodes(barcodes)
     barcodes_no_N = barcodes.keys()
 
     if seq in barcodes_no_N:  # no need to check all barcodes
         winner = barcodes[seq]  # barcode WITH Ns included
-    elif min_score == len(barcodes_no_N):  # i.e. no matches allowed, and seq not in barcodes
-        winner = "no_match"
+    # elif min_score == len(barcodes_no_N):  # i.e. no matches allowed, and seq not in barcodes
+    #     winner = "no_match"
+        # print(seq)
+        # print(winner)
+        # print("")
     else:  # mismatches allowed so need to check
-        scores = {}
+        dists = {}
 
         for this_bc in barcodes_no_N:
             # # score the barcode against the read, penalty for N in the read
             # score = sum(a == b for a, b in zip(this_bc, seq))
             # scores[this_bc] = score
-            
-            score = hamming_distance(this_bc, seq)
-            scores[this_bc] = score
+            if this_bc != "no_match":
+                dist = subglobal_distance(this_bc, seq)
+                dists[this_bc] = dist
 
         # Find the best score
-        best_score = max(scores.values())
+        min_dist = min(dists.values())
 
-        if best_score < min_score:
+        if min_dist > max_edit_distance:
             winner = "no_match"
         else:
             # check that there is only one barcode with the max score
-            filtered = [a for a, b in scores.items() if b == best_score]
-            if len(filtered) > 1:
-                winner = "no_match"
-            else:  # if there is only one
-                winner = barcodes[filtered[0]]  # barcode WITH Ns included
+            filtered = [a for a, b in dists.items() if b == min_dist]
+            # if len(filtered) > 1:
+            #     winner = "no_match-ambiguous" #need to decide how to fix the multiple matches situation
+            # else:  # if there is only one
+            #     winner = barcodes[filtered[0]]  # barcode WITH Ns included
+            winner = barcodes[filtered[0]]  # barcode WITH Ns included
+        print(seq)
+        print(winner)
+        print(min_dist)
+        print("")
     return winner
 
 
@@ -889,11 +946,14 @@ def five_p_demulti(read, five_p_bc_pos, five_p_umi_poses,
     else:  # if not
         to_add = "rbc:"
 
+    # print(five_p_bc_pos)
+    # print(read.sequence)
     if sequence_length > max(five_p_bc_pos):
         # find best barcode match
-        this_bc_seq = ''.join([read.sequence[i] for i in five_p_bc_pos])
-
+        # this_bc_seq = ''.join([read.sequence[i] for i in five_p_bc_pos])
+        this_bc_seq = read.sequence
         if "dont_build" in five_p_bc_dict:
+            # print(this_bc_seq)
             winner = score_barcode_for_dict(this_bc_seq, barcodes_no_N, min_score, Ns_removed=True)
         else:
             winner = five_p_bc_dict[this_bc_seq]

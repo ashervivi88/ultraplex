@@ -9,10 +9,10 @@ test_demux.fq.gz
 ultraplex-full.png
 ultraplex_1689369121.466796.log
 ultraplex_1689369137.528246.log
+ultraplex_1689369421.846211.log
 ultraplex_demux_5bc_GTCAAGCACATCTACACAGTTAGCCGC.fastq.gz
 ultraplex_demux_5bc_GTCCCACTGGAACGACTGTCCCGCATC.fastq.gz
 ultraplex_demux_5bc_TATGCATAGAAATACGTGTTTGTAAGT.fastq.gz
-ultraplex_demux_5bc_no_match.fastq.gz
 uploading_to_servers.info
 dist/ultraplex-1.2.5-py3.6-macosx-10.9-x86_64.egg
 tests/all_simple_tests.readme
