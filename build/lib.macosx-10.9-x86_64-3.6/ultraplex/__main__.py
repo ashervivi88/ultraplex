@@ -128,7 +128,7 @@ def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
 	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
 	"""
 
-    # print(max_edit_distance)
+    max_edit_distance=8
     if not Ns_removed:
         barcodes = remove_Ns_from_barcodes(barcodes)
     barcodes_no_N = barcodes.keys()
