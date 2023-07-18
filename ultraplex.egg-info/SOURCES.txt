@@ -42,6 +42,9 @@ ultraplex_1689623892.966521.log
 ultraplex_1689624401.27497.log
 ultraplex_1689624460.414784.log
 ultraplex_1689624498.0500312.log
+ultraplex_1689625900.005795.log
+ultraplex_1689626122.11977.log
+ultraplex_1689627589.802197.log
 ultraplex_demux_5bc_ACGCAGGTCTTGATAGGCCCTTGAACT.fastq.gz
 ultraplex_demux_5bc_AGACCCTGTTTAGAAGCTTTCACGTCA.fastq.gz
 ultraplex_demux_5bc_GTCAAGCACATCTACACAGTTAGCCGC.fastq.gz
@@ -49,6 +52,7 @@ ultraplex_demux_5bc_GTCCCACTGGAACGACTGTCCCGCATC.fastq.gz
 ultraplex_demux_5bc_TATGCATAGAAATACGTGTTTGTAAGT.fastq.gz
 ultraplex_demux_5bc_TCAGGTTGTCTCTTAAGTTTCCCAATA.fastq.gz
 ultraplex_demux_5bc_TTGACTCCTACAAACTTTAAACCCGGC.fastq.gz
+ultraplex_demux_5bc_no_match.fastq.gz
 uploading_to_servers.info
 dist/ultraplex-1.2.5-py3.6-macosx-10.9-x86_64.egg
 tests/all_simple_tests.readme

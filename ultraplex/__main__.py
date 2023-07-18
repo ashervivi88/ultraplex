@@ -77,6 +77,18 @@ def subglobal_distance(s2, s1):
     # Return min distance
     return mini
 
+def user_trim(read, trim_sequences):
+    """Simply helper function to remove
+    helper sequences from a barcode"""
+    prev_start = 0
+    prev_end = 0
+    for start,end in trim_sequences:
+        offset = prev_end - prev_start
+        read.sequence = read.sequence[:(start-offset)] + read.sequence[(end-offset):]
+        read.qualities = read.qualities[:(start-offset)] + read.qualities[(end-offset):]
+        prev_start = start
+        prev_end = end
+    return read
 
 def round_sig(x, sig=2):
     try:
@@ -485,30 +497,36 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
         self._keep_barcode = keep_barcode
 
     def trim_and_cut(self, read, cutter, reads_quality_trimmed, reads_adaptor_trimmed):
-        # /# first, trim by quality score
-        q_start, q_stop = quality_trim_index(read.qualities, self._start_qc, self._end_qc)
-        prev_length = len(read.sequence)
-        read = read[q_start:q_stop]
-        if not len(read.sequence) == prev_length:
-            # then it was trimmed
-            reads_quality_trimmed += 1
+            # even more first trim by 
+            # print(len(read.sequence))
+            # /# first, trim by quality score
+            q_start, q_stop = quality_trim_index(read.qualities, self._start_qc, self._end_qc)
+            # print(q_start)
+            # print(q_stop)
+            prev_length = len(read.sequence)
+            read = read[q_start:q_stop]
+            # print(len(read.sequence))
+            # print("")
+            if not len(read.sequence) == prev_length:
+                # then it was trimmed
+                reads_quality_trimmed += 1
 
-        # /# then, trim adapter
-        prev_length = len(read.sequence)
-        read = cutter(read, ModificationInfo(read))
-        if not len(read.sequence) == prev_length:
-            # then it was trimmed
-            trimmed = True
-            reads_adaptor_trimmed += 1
-        else:
-            trimmed = False
+            # /# then, trim adapter
+            prev_length = len(read.sequence)
+            read = cutter(read, ModificationInfo(read))
+            if not len(read.sequence) == prev_length:
+                # then it was trimmed
+                trimmed = True
+                reads_adaptor_trimmed += 1
+            else:
+                trimmed = False
 
-        if prev_length - len(read.sequence) >= self._min_trim:
-            min_trimmed = True
-        else:
-            min_trimmed = False
+            if prev_length - len(read.sequence) >= self._min_trim:
+                min_trimmed = True
+            else:
+                min_trimmed = False
 
-        return read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed
+            return read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed
 
     def run(self):
 
@@ -550,12 +568,31 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                 for read in InputFiles(infiles).open():
                     reads_written += 1
                     umi = ""
-
+                    
+                    # print(read)
+                    # print(cutter)
+                    # print(reads_quality_trimmed)
+                    # print(reads_adaptor_trimmed)
+                    # print("")
+                    #print(read.type)
+                    
+                    trim_sequences = [(30, 34), (80, 88), (90, 100)]
+                    
+                    read = user_trim(read, trim_sequences)
+                    
+                    
                     read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed = self.trim_and_cut(read,
                                                                                                                  cutter,
                                                                                                                  reads_quality_trimmed,
                                                                                                                  reads_adaptor_trimmed)
 
+                    #print(read)
+                    # print(trimmed)
+                    # print(reads_quality_trimmed)
+                    # print(reads_adaptor_trimmed)
+                    # print(min_trimmed)
+                    # print("")
+                    
                     # /# demultiplex at the 5' end ###
                     read.name = read.name.replace(" ", "").replace("/", "").replace("\\",
                                                                                     "")  # remove bad characters

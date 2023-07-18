@@ -409,10 +409,16 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
         self._keep_barcode = keep_barcode
 
     def trim_and_cut(self, read, cutter, reads_quality_trimmed, reads_adaptor_trimmed):
+        # even more first trim by 
+        print(ReaderProcess)
         # /# first, trim by quality score
         q_start, q_stop = quality_trim_index(read.qualities, self._start_qc, self._end_qc)
+        print(q_start)
+        print(q_stop)
         prev_length = len(read.sequence)
         read = read[q_start:q_stop]
+        print(read)
+        print("")
         if not len(read.sequence) == prev_length:
             # then it was trimmed
             reads_quality_trimmed += 1
