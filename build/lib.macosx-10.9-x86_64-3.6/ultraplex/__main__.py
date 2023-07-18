@@ -80,6 +80,11 @@ def subglobal_distance(s2, s1):
 def user_trim(read, trim_sequences):
     """Simply helper function to remove
     helper sequences from a barcode"""
+    
+    if len(read.sequence) <= trim_sequences[-1][-1]:
+        raise ValueError("Invalid trimming sequences given " \
+                         "The number of positions given must be even and they must fit into the barcode length.")
+
     prev_start = 0
     prev_end = 0
     for start,end in trim_sequences:
@@ -176,10 +181,10 @@ def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
             # else:  # if there is only one
             #     winner = barcodes[filtered[0]]  # barcode WITH Ns included
             winner = barcodes[filtered[0]]  # barcode WITH Ns included
-        print(seq)
-        print(winner)
-        print(min_dist)
-        print("")
+    #     print(min_dist)
+    # print(seq)
+    # print(winner)
+    # print("")
     return winner
 
 
@@ -462,7 +467,8 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                  ignore_no_match,
                  final_min_length,
                  dont_build_reference,
-                 keep_barcode):
+                 keep_barcode,
+                 trim_sequences):
         super().__init__()
         self._id = index  # the worker id
         self._read_pipe = read_pipe  # the pipe the reader reads data from
@@ -495,6 +501,8 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
         self._barcodes_no_N = remove_Ns_from_barcodes(five_p_bcs)
         self._linked_bcds_no_N = {key: remove_Ns_from_barcodes(value) for (key, value) in linked_bcds.items()}
         self._keep_barcode = keep_barcode
+        
+        self._trim_sequences = trim_sequences
 
     def trim_and_cut(self, read, cutter, reads_quality_trimmed, reads_adaptor_trimmed):
             # even more first trim by 
@@ -529,7 +537,6 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
             return read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed
 
     def run(self):
-
         while True:  # /# once spawned, this keeps running forever, until poison pill recieved
             if self._i2 is False:  # then it's single end
                 # Notify reader that we need data
@@ -576,15 +583,10 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                     # print("")
                     #print(read.type)
                     
-                    trim_sequences = [(30, 34), (80, 88), (90, 100)]
+                    # trim_sequences = [(30, 34), (80, 88), (90, 100)]
+                    trim_sequences = self._trim_sequences
                     
-                    print(read.name)
-                    print(read.sequence)
-                    print(read.qualities)
                     read = user_trim(read, trim_sequences)
-                    print(read.name)
-                    print(read.sequence)
-                    print(read.qualities)
                     
                     
                     read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed = self.trim_and_cut(read,
@@ -1054,7 +1056,7 @@ def start_workers(n_workers, input_file, need_work_queue, adapter,
                   total_reads_qtrimmed, total_reads_adaptor_trimmed, total_reads_5p_no_3p,
                   min_score_5_p, three_p_mismatches, linked_bcds, three_p_trim_q,
                   ultra_mode, output_directory, final_min_length, q5, i2, adapter2, min_trim,
-                  ignore_no_match, dont_build_reference, keep_barcode):
+                  ignore_no_match, dont_build_reference, keep_barcode, trim_sequences):
     """
 	This function starts all the workers
 	"""
@@ -1099,7 +1101,9 @@ def start_workers(n_workers, input_file, need_work_queue, adapter,
                                ignore_no_match=ignore_no_match,
                                final_min_length=final_min_length,
                                dont_build_reference=dont_build_reference,
-                               keep_barcode=keep_barcode)
+                               keep_barcode=keep_barcode,
+                               trim_sequences=trim_sequences
+                               )
 
         worker.start()
         workers.append(worker)
@@ -1303,24 +1307,6 @@ def process_bcs(csv, mismatch_5p):
     return five_p_bcs, three_p_bcs, linked, match_5p, sample_names
 
 
-def print_header():
-    print("")
-    print(
-        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-    print(
-        "@@@@@   @@@@   .@@   @@@@@@@          @@         @@@@@@    (@@@@@        @@@    @@@@@@@         @@    @@@    @")
-    print(
-        "@@@@   @@@@    @@   ,@@@@@@@@@    @@@@@    @@@   @@@@   (   @@@@   @@@   @@    @@@@@@@   @@@@@@@@@@   #   @@@@")
-    print(
-        "@@@   &@@@    @@    @@@@@@@@@%   @@@@@         @@@@(   @    @@@         @@    @@@@@@@         @@@@@     @@@@@@")
-    print(
-        "@@    @@@    @@    @@@@@@@@@@   @@@@@    @@    @@@          @@   .@@@@@@@*   @@@@@@@    @@@@@@@@.   @    @@@@@")
-    print(
-        "@@@       @@@@.        @@@@@   @@@@@&   @@@.   &   &@@@@    @    @@@@@@@@         @          @    @@@@    @@@@")
-    print(
-        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-    print("")
-
 
 def check_enough_space(output_directory, input_file,
                        ignore_space_warning, ultra_mode, i2):
@@ -1368,7 +1354,6 @@ def check_N_position(bcds, type):
 
 
 def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
-    print_header()
     start = time.time()
 
     ## PARSE COMMAND LINE ARGUMENTS ##
@@ -1436,6 +1421,11 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     optional.add_argument("-kbc", "--keep_barcode", default=False, action="store_true",
                           help="Do not remove barcodes/UMIs from the read (UMIs will still be moved to the "
                                "read header)")
+    optional.add_argument("-ts","--trim-sequences", type=int, default=None, nargs='+', 
+                        help="Trims from the barcodes in the input file\n" \
+                        "The bases given in the list of tuples as START END START END .. where\n" \
+                        "START is the integer position of the first base (0 based) and END is the integer\n" \
+                        "position of the last base.\nTrimmng sequences can be given several times.")
 
     parser._action_groups.append(optional)
     args = parser.parse_args()
@@ -1477,6 +1467,7 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     dont_build_reference = args.dont_build_reference
     keep_barcode = args.keep_barcode
 
+
     if i2 == "":
         i2 = False
 
@@ -1488,6 +1479,23 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
             print("sbatch_compression can only be used in conjunction with ultra mode")
             print("setting sbatch_compression to false")
             sbatch_compression = False
+    
+    if args.trim_sequences is not None \
+    and (len(args.trim_sequences) % 2 != 0 or min(args.trim_sequences) < 0): 
+        raise ValueError("Invalid trimming sequences given " \
+                         "The number of positions given must be even and they must fit into the barcode length.")
+    
+    # Make the input trim coordinates a list of tuples
+    trim_sequences = None
+    if args.trim_sequences is not None:
+        trim_sequences = list()
+        sorted_seqs = args.trim_sequences
+        sorted_seqs.sort()
+
+        for i in range(len(sorted_seqs) - 1):
+            if i % 2 == 0:
+                trim_sequences.append((sorted_seqs[i], 
+                                       sorted_seqs[i+1]))
 
     # assert output_directory=="" or output_directory[len(output_directory)-1]=="/", "Error! Directory must end with '/'"
 
@@ -1536,7 +1544,8 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
                                                     ignore_no_match=ignore_no_match,
                                                     final_min_length=final_min_length,
                                                     dont_build_reference=dont_build_reference,
-                                                    keep_barcode=keep_barcode)
+                                                    keep_barcode=keep_barcode,
+                                                    trim_sequences=trim_sequences)
 
     print("Demultiplexing...")
     reader_process = ReaderProcess(file_name, all_conn_w,
