@@ -617,6 +617,8 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                     
                     print(read)
                     print(five_p_bc)
+                    if five_p_bc != "no_match":
+                        print(self._coordinates[five_p_bc])
                     print(umi)
                     print("")
 
@@ -1331,7 +1333,7 @@ def process_bcs(tsv, mismatch_5p):
             # First, find if theres a comma
             line = row.split('\t')
             barcodes.append(line[0])
-            coordinates[line[0]]=(line[1],line[2])
+            coordinates[line[0]]=(line[1],line[2].strip()) #in case \n
             
     match_5p = len(barcodes[0]) - mismatch_5p
 
