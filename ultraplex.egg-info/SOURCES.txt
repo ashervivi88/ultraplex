@@ -113,6 +113,12 @@ ultraplex_1689779285.0098329.log
 ultraplex_1689779388.483797.log
 ultraplex_1689779652.016177.log
 ultraplex_1689779734.401132.log
+ultraplex_1689781632.8024561.log
+ultraplex_1689781656.5591009.log
+ultraplex_1689784963.922606.log
+ultraplex_1689785041.278448.log
+ultraplex_1689785147.800413.log
+ultraplex_1689785165.852459.log
 ultraplex__tmp_thread_0.fastq
 ultraplex__tmp_thread_2.fastq
 uploading_to_servers.info
