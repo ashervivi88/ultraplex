@@ -119,6 +119,18 @@ ultraplex_1689784963.922606.log
 ultraplex_1689785041.278448.log
 ultraplex_1689785147.800413.log
 ultraplex_1689785165.852459.log
+ultraplex_1689787258.069698.log
+ultraplex_1689787311.815121.log
+ultraplex_1689787397.866647.log
+ultraplex_1689787410.538923.log
+ultraplex_1689787559.324202.log
+ultraplex_1689787674.15504.log
+ultraplex_1689787678.319751.log
+ultraplex_1689787801.615825.log
+ultraplex_1689787885.346675.log
+ultraplex_1689788065.5297458.log
+ultraplex_1689788105.242026.log
+ultraplex_1689788130.185493.log
 ultraplex__tmp_thread_0.fastq
 ultraplex__tmp_thread_2.fastq
 uploading_to_servers.info
@@ -143,6 +155,7 @@ tests/test_simple/generate_simple_PE_fastq.py
 tests/test_simple/reads1.fastq.gz
 tests/test_simple/reads2.fastq.gz
 ultraplex/__init__.py
+ultraplex/__main__ copy.py
 ultraplex/__main__.py
 ultraplex/_align.c
 ultraplex/_align_new.c
