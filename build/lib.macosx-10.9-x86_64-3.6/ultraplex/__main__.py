@@ -119,7 +119,7 @@ def make_5p_bc_dict(barcodes, min_score, dont_build_reference):
         for bc in barcodes:
             assert len(bc.replace("N", "")) == seq_length, "Your experimental barcodes are different lengths."
 
-        seqs = make_all_seqs(seq_length)
+        #seqs = make_all_seqs(seq_length)
         
         # print(seqs)
         # print("")
@@ -592,10 +592,10 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                         read = user_trim(read, trim_sequences)
                     
                     
-                    read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed = self.trim_and_cut(read,
-                                                                                                                 cutter,
-                                                                                                                 reads_quality_trimmed,
-                                                                                                                 reads_adaptor_trimmed)
+                    # read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed = self.trim_and_cut(read,
+                    #                                                                                              cutter,
+                    #                                                                                              reads_quality_trimmed,
+                    #                                                                                              reads_adaptor_trimmed)
 
                     #print(read)
                     # print(trimmed)
@@ -1478,9 +1478,10 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
                           help="Do not write reads for which there is no match.")
     optional.add_argument("-dbr", "--dont_build_reference", default=False, action="store_true",
                           help="Skip the reference building step - for long barcodes this will improve speed.")
-    optional.add_argument("-kbc", "--keep_barcode", default=False, action="store_true",
+    optional.add_argument("-kbc", "--keep_barcode", default=True, action="store_true",
                           help="Do not remove barcodes/UMIs from the read (UMIs will still be moved to the "
                                "read header)")
+    
     optional.add_argument("-ts","--trim-sequences", type=int, default=None, nargs='+', 
                         help="Trims from the barcodes in the input file\n" \
                         "The bases given in the list of tuples as START END START END .. where\n" \
