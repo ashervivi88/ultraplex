@@ -1,0 +1,6 @@
+2023-07-19 10:33:48,561 INFO     Namespace(adapter='AGATCGGAAGAGCGGTTCAG', adapter2='AGATCGGAAGAGCGTCGTG', barcodes='/Users/akim/Desktop/testbarcodes1.tsv', directory='', dont_build_reference=True, final_min_length=20, fiveprimemismatches=1, ignore_no_match=False, ignore_space_warning=False, input_2='', inputfastq='/Users/akim/Desktop/testset.fq.gz', keep_barcode=False, min_trim=3, outputprefix='demux', phredquality=30, phredquality_5_prime=0, sbatchcompression=False, threads=4, threeprimemismatches=0, trim_sequences=[33, 93, 99, 110], ultra=False)
+2023-07-19 10:33:50,179 INFO     Demultiplexing complete! 8 reads processed in 1.0 seconds
+2023-07-19 10:33:50,180 INFO     6 (75.0%) reads quality trimmed
+2023-07-19 10:33:50,180 INFO     2 (25.0%) reads adaptor trimmed
+2023-07-19 10:33:50,180 INFO     0 (0%) reads with correct 5' bc but 3' bc not found
+2023-07-19 10:33:50,181 INFO     0 (0%) reads correctly assigned to sample files

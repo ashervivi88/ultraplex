@@ -538,6 +538,8 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
             return read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed
 
     def run(self):
+        
+        
         while True:  # /# once spawned, this keeps running forever, until poison pill recieved
             if self._i2 is False:  # then it's single end
                 # Notify reader that we need data
@@ -615,12 +617,38 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                                                                      min_score=self._min_score_5_p,
                                                                      keep_barcode=self._keep_barcode)
                     
-                    print(read)
-                    print(five_p_bc)
+                    
+                    
+
                     if five_p_bc != "no_match":
-                        print(self._coordinates[five_p_bc])
-                    print(umi)
-                    print("")
+                        x_coord = self._coordinates[five_p_bc][0]
+                        y_coord = self._coordinates[five_p_bc][1]
+                        read.name = read.name + " B0:Z:" + five_p_bc + " B1:Z:" + x_coord + " B2:Z:" + y_coord
+                        print(read.name)
+                        
+                        filename = 'matched.fastq'
+
+                        if os.path.exists(filename):
+                            append_write = 'a'  # append if already exists
+                        else:
+                            append_write = 'w'  # make a new file if not
+
+                        with open(filename, append_write) as file:
+                            this_out = []
+                            this_out.append("@" + read.name)
+                            this_out.append(read.sequence)
+                            this_out.append("+")
+                            this_out.append(read.qualities)
+                            output = '\n'.join(this_out) + '\n'
+                            file.write(output)
+                        
+                                        
+                    
+                    # print(five_p_bc)
+                    # if five_p_bc != "no_match":
+                    #     print(self._coordinates[five_p_bc])
+                    # print(umi)
+                    # print("")
 
                     # # /# demultiplex at the 3' end
                     # # First, check if this 5' barcode has any 3' barcodes
@@ -675,18 +703,18 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                     #     except KeyError:
                     #         this_buffer_dict[comb_bc] = [read]
                 
-                print(this_buffer_dict)
-                print(this_buffer_dict.items())
 
-                ## Write out! ##
-                for demulti_type, reads in this_buffer_dict.items():
-                    write_tmp_files(output_dir=self._output_directory,
-                                    save_name=self._save_name,
-                                    demulti_type=demulti_type,
-                                    worker_id=self._id,
-                                    reads=reads,
-                                    ultra_mode=self._ultra_mode,
-                                    ignore_no_match=self._ignore_no_match)
+                # ## Write out! ##
+                # for demulti_type, reads in this_buffer_dict.items():
+                #     write_tmp_files(output_dir=self._output_directory,
+                #                     save_name=self._save_name,
+                #                     demulti_type=demulti_type,
+                #                     worker_id=self._id,
+                #                     reads=reads,
+                #                     ultra_mode=self._ultra_mode,
+                #                     ignore_no_match=self._ignore_no_match)
+                
+                
 
             else:  # if paired end
                 # Notify reader that we need data
