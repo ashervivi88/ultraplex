@@ -1,0 +1,2 @@
+2023-07-19 16:03:05,550 INFO     Namespace(barcodes='/Users/akim/Desktop/testbarcodes1.tsv', directory='', dont_build_reference=True, fiveprimemismatches=1, ignore_no_match=False, ignore_space_warning=False, inputfastq='/Users/akim/Desktop/1000.fastq.gz', outputprefix='demux', sbatchcompression=False, threads=4, trim_sequences=[33, 93, 99, 110], ultra=False)
+2023-07-19 16:03:05,824 INFO     Demultiplexing complete! 0 reads processed in 0.0 seconds

@@ -165,7 +165,8 @@ def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
             # score = sum(a == b for a, b in zip(this_bc, seq))
             # scores[this_bc] = score
             if this_bc != "no_match":
-                dist = subglobal_distance(this_bc, seq)
+                #dist = subglobal_distance(this_bc, seq)
+                dist = hamming_distance(this_bc, seq)
                 dists[this_bc] = dist
 
         # Find the best score
@@ -325,7 +326,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
         self._five_p_barcodes_pos, self._five_p_umi_poses = find_bc_and_umi_pos(barcodes)
         self._five_p_bc_dict = make_5p_bc_dict(barcodes, min_score_5_p, dont_build_reference)
         self._min_score_5_p = min_score_5_p  
-        self._ultra_mode = ultra_mode
+        self._ultra_mode = False
         self._output_directory = output_directory
 
         self._ignore_no_match = ignore_no_match
@@ -360,7 +361,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
 
             # /# process the reads
             #processed_reads = []
-            #this_buffer_dict = {}
+            this_buffer_list = []
             reads_written = 0
             assigned_reads = 0
 
@@ -396,23 +397,34 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                     x_coord = self._coordinates[five_p_bc][0]
                     y_coord = self._coordinates[five_p_bc][1]
                     read.name = read.name + " B0:Z:" + five_p_bc + " B1:Z:" + x_coord + " B2:Z:" + y_coord
+                    this_buffer_list.append(read)
                     #print(read.name)
                     
-                    filename = 'matched.fastq.gz'
+                    # filename = 'matched-4000.fastq.gz'
 
-                    if os.path.exists(filename):
-                        append_write = 'ab'  # append if already exists
-                    else:
-                        append_write = 'wb'  # make a new file if not
+                    # if os.path.exists(filename):
+                    #     append_write = 'ab'  # append if already exists
+                    # else:
+                    #     append_write = 'wb'  # make a new file if not
 
-                    with gzip.open(filename, append_write) as file:
-                        this_out = []
-                        this_out.append("@" + read.name)
-                        this_out.append(read.sequence)
-                        this_out.append("+")
-                        this_out.append(read.qualities)
-                        output = '\n'.join(this_out) + '\n'
-                        file.write(output.encode())
+                    # with gzip.open(filename, append_write) as file:
+                    #     this_out = []
+                    #     this_out.append("@" + read.name)
+                    #     this_out.append(read.sequence)
+                    #     this_out.append("+")
+                    #     this_out.append(read.qualities)
+                    #     output = '\n'.join(this_out) + '\n'
+                    #     file.write(output.encode())
+
+            ## Write out! ##
+            for read in this_buffer_list:
+                write_temp_files(output_dir=self._output_directory,
+                                save_name=self._save_name,
+                                # demulti_type=demulti_type,
+                                worker_id=self._id,
+                                read=read)
+                                # ultra_mode=self._ultra_mode,
+                                # ignore_no_match=self._ignore_no_match)
 
             # LOG reads processed
             prev_total = self._total_demultiplexed.get()
@@ -431,6 +443,71 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
             new_total = prev_total + assigned_reads
             self._total_reads_assigned.put(new_total)
 
+def write_temp_files(output_dir, save_name, worker_id, read):
+    # write_this = True  # assume true
+    # if "no_match" in demulti_type and ignore_no_match:
+    #     write_this = False
+
+    # if ultra_mode and write_this:
+    #     # /# work out this filename
+    #     filename = output_dir + 'ultraplex_' + save_name + demulti_type + '_tmp_thread_' + str(
+    #         worker_id) + '.fastq'
+
+    #     if os.path.exists(filename):
+    #         append_write = 'a'  # append if already exists
+    #     else:
+    #         append_write = 'w'  # make a new file if not
+
+    #     with open(filename, append_write) as file:
+    #         this_out = []
+    #         for counter, read in enumerate(reads):
+    #             # Quality control:
+    #             assert len(read.name.split("rbc:")) <= 2, "Multiple UMIs in header!"
+
+    #             if counter == 0:
+    #                 umi_l = len(read.name.split("rbc:")[1])
+    #             assert len(read.name.split("rbc:")[1]) == umi_l, "UMIs are different lengths"
+    #             ## combine into a single list
+    #             this_out.append("@" + read.name)
+    #             this_out.append(read.sequence)
+    #             this_out.append("+")
+    #             this_out.append(read.qualities)
+
+    #         output = '\n'.join(this_out) + '\n'
+    #         # print(output)
+    #         file.write(output)
+
+    # elif write_this:
+        # /# work out this filename
+        # filename = output_dir + 'ultraplex_' + save_name + demulti_type + '_tmp_thread_' + str(
+        #     worker_id) + '.fastq.gz'
+
+    filename = output_dir + 'ultraplex_' + save_name + 'tmp_thread_' + str(
+        worker_id) + '.fastq'
+
+    if os.path.exists(filename):
+        append_write = 'a'  # append if already exists
+    else:
+        append_write = 'w'  # make a new file if not
+
+    with gzip.open(filename, append_write) as file:
+        this_out = []
+        # for counter, read in enumerate(reads):
+
+        #     # Quality control:
+        #     assert len(read.name.split("rbc:")) <= 2, "Multiple UMIs in header!"
+
+        #     if counter == 0:
+        #         umi_l = len(read.name.split("rbc:")[1])
+        #     assert len(read.name.split("rbc:")[1]) == umi_l, "UMIs are different lengths"
+        #     ## combine into a single list
+        this_out.append("@" + read.name)
+        this_out.append(read.sequence)
+        this_out.append("+")
+        this_out.append(read.qualities)
+
+        output = '\n'.join(this_out) + '\n'
+        file.write(output.encode())
 
 def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
                     ultra_mode, ignore_no_match):

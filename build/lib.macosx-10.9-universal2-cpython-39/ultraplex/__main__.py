@@ -16,7 +16,84 @@ import shutil
 from pathlib import Path
 import logging
 from math import log10, floor
+import numpy as np
 
+def  hamming_distance(seq1, seq2, limit=0):
+    """
+    Returns the Hamming distance between equal-length sequences.
+    :param seq1: first sequence. - str
+    :param seq2: second sequence. - str
+    :param limit: max distance limit before aborting (returning limit + 1).
+    :return: the edit distance.
+    """
+    i = 0
+    sum = 0
+    for i in range(len(seq1)):
+        if seq1[i] != seq2[i]:
+            sum += 1
+        if limit > 0 and sum > limit:
+            return limit + 1
+    return sum
+
+def subglobal_distance(s2, s1):
+    """
+    Computes the edit distance for a sub-global alignment
+    of a sequence s2 against a sequence s1.
+    Mismatches and indels both score as 1. Overhanging parts of s1 do not count.
+    :param s1: the longer (probe) sequence.
+    :param s2: the shorter sought sequence.
+    :return: the minimum edit distance
+    """
+    xLen = len(s1)
+    yLen = len(s2)
+
+    if xLen < yLen:
+        raise ValueError("Sub-global edit distance is undefined for sequences "
+                         "where the probe is shorter than the aligned sequence.")
+
+    d = np.empty([xLen + 1, yLen + 1], dtype=np.uint32)
+
+    # Initialize array
+    d[:, 0] = 0
+    d[0, :] = np.arange(yLen + 1)
+
+    # Perform DP.
+    for x in range(1, xLen + 1):
+        # Fill matrix.
+        for y in range(1, yLen + 1):
+            d[x, y] = min(d[x - 1, y] + 1, d[x, y - 1] + 1, d[x - 1, y - 1] + int(s1[x - 1] != s2[y - 1]))
+
+    # Find min for sub-global alignment so that all of s2 is covered,
+    # but not necessarily all of s1 sequence.
+    mini = 1000000
+    iPos = 0
+    i = xLen
+    while i > 0:
+        if d[i, yLen] < mini:
+            mini = d[i, yLen]
+            iPos = i
+        i -= 1
+
+    # Return min distance
+    return mini
+
+def user_trim(read, trim_sequences):
+    """Simply helper function to remove
+    helper sequences from a barcode"""
+    
+    if len(read.sequence) <= trim_sequences[-1][-1]:
+        raise ValueError("Invalid trimming sequences given " \
+                         "The number of positions given must be even and they must fit into the barcode length.")
+
+    prev_start = 0
+    prev_end = 0
+    for start,end in trim_sequences:
+        offset = prev_end - prev_start
+        read.sequence = read.sequence[:(start-offset)] + read.sequence[(end-offset):]
+        read.qualities = read.qualities[:(start-offset)] + read.qualities[(end-offset):]
+        prev_start = start
+        prev_end = end
+    return read
 
 def round_sig(x, sig=2):
     try:
@@ -31,6 +108,7 @@ def make_5p_bc_dict(barcodes, min_score, dont_build_reference):
 	this function generates a dictionary that matches each possible sequence
 	from the read with the best 5' barcode
 	"""
+    max_edit_distance = 8
     if dont_build_reference:
         return {"dont_build": True}
     else:
@@ -38,17 +116,20 @@ def make_5p_bc_dict(barcodes, min_score, dont_build_reference):
         seq_length = len(first_bc.replace("N", ""))
 
         # check all the barcodes are the same length (ignoring UMIs)
-        for bc in barcodes:
-            assert len(bc.replace("N", "")) == seq_length, "Your experimental barcodes are different lengths."
+        # for bc in barcodes:
+        #     assert len(bc.replace("N", "")) == seq_length, "Your experimental barcodes are different lengths."
 
         seqs = make_all_seqs(seq_length)
+        
+        # print(seqs)
+        # print("")
 
         # trim sequences to desired length
         # create dictionary
         barcode_dictionary = {}
 
         for seq in seqs:
-            barcode_dictionary[seq] = score_barcode_for_dict(seq, barcodes, min_score)
+            barcode_dictionary[seq] = score_barcode_for_dict(seq, barcodes, max_edit_distance)
         return barcode_dictionary
 
 
@@ -59,39 +140,52 @@ def remove_Ns_from_barcodes(barcodes):
     return barcodes_no_N
 
 
-def score_barcode_for_dict(seq, barcodes, min_score, Ns_removed=False):
+def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
     """
 	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
 	"""
 
+    max_edit_distance=8
     if not Ns_removed:
         barcodes = remove_Ns_from_barcodes(barcodes)
     barcodes_no_N = barcodes.keys()
 
     if seq in barcodes_no_N:  # no need to check all barcodes
         winner = barcodes[seq]  # barcode WITH Ns included
-    elif min_score == len(barcodes_no_N):  # i.e. no matches allowed, and seq not in barcodes
-        winner = "no_match"
+    # elif min_score == len(barcodes_no_N):  # i.e. no matches allowed, and seq not in barcodes
+    #     winner = "no_match"
+        # print(seq)
+        # print(winner)
+        # print("")
     else:  # mismatches allowed so need to check
-        scores = {}
+        dists = {}
 
         for this_bc in barcodes_no_N:
-            # score the barcode against the read, penalty for N in the read
-            score = sum(a == b for a, b in zip(this_bc, seq))
-            scores[this_bc] = score
+            # # score the barcode against the read, penalty for N in the read
+            # score = sum(a == b for a, b in zip(this_bc, seq))
+            # scores[this_bc] = score
+            if this_bc != "no_match":
+                #dist = subglobal_distance(this_bc, seq)
+                dist = hamming_distance(this_bc, seq)
+                dists[this_bc] = dist
 
         # Find the best score
-        best_score = min(scores.values())
+        min_dist = min(dists.values())
 
-        if best_score < min_score:
+        if min_dist > max_edit_distance:
             winner = "no_match"
         else:
             # check that there is only one barcode with the max score
-            filtered = [a for a, b in scores.items() if b == best_score]
-            if len(filtered) > 1:
-                winner = "no_match"
-            else:  # if there is only one
-                winner = barcodes[filtered[0]]  # barcode WITH Ns included
+            filtered = [a for a, b in dists.items() if b == min_dist]
+            # if len(filtered) > 1:
+            #     winner = "no_match-ambiguous" #need to decide how to fix the multiple matches situation
+            # else:  # if there is only one
+            #     winner = barcodes[filtered[0]]  # barcode WITH Ns included
+            winner = barcodes[filtered[0]]  # barcode WITH Ns included
+    #     print(min_dist)
+    # print(seq)
+    # print(winner)
+    # print("")
     return winner
 
 
@@ -108,7 +202,7 @@ class ReaderProcess(Process):
 	and finally sends the stop token -1 ("poison pills") to all connections.
 	"""
 
-    def __init__(self, file, connections, queue, buffer_size, i2):
+    def __init__(self, file, connections, queue, buffer_size):#, i2):
         # /# Setup the reader process
 
         """
@@ -121,7 +215,7 @@ class ReaderProcess(Process):
         self.connections = connections
         self.queue = queue
         self.buffer_size = buffer_size
-        self.file2 = i2
+        #self.file2 = i2
 
     def run(self):
         # if self.stdin_fd != -1:
@@ -130,14 +224,8 @@ class ReaderProcess(Process):
 
         try:
             with xopen(self.file, 'rb') as f:
-                if self.file2:
-                    with xopen(self.file2, 'rb') as f2:
-                        for chunk_index, (chunk1, chunk2) in enumerate(
-                                dnaio.read_paired_chunks(f, f2, self.buffer_size)):
-                            self.send_to_worker(chunk_index, chunk1, chunk2)
-                else:
-                    for chunk_index, chunk in enumerate(dnaio.read_chunks(f, self.buffer_size)):
-                        self.send_to_worker(chunk_index, chunk)
+                for chunk_index, chunk in enumerate(dnaio.read_chunks(f, self.buffer_size)):
+                    self.send_to_worker(chunk_index, chunk)
 
             # Send poison pills to all workers
             for _ in range(len(self.connections)):
@@ -170,22 +258,6 @@ class InputFiles:
     def open(self):
         return dnaio.open(self.file1,
                           interleaved=self.interleaved, mode="r")
-
-
-def make_3p_bc_dict(bcs, min_score):
-    """
-	Generates a dictionary that matches a given sequence with
-	its best 3' barcode match, or "no_match"
-	"""
-    # First, find positions of barcode bases (not UMIs) relative to 3' end of read
-
-    bcl = len([a for a, b in enumerate(bcs[0]) if b != "N"])  # number of non-N characters in barcode
-    all_seqs = make_all_seqs(bcl)
-    three_p_match_d = {}
-    for seq in all_seqs:
-        # now check if there actually is a match
-        three_p_match_d[seq] = score_barcode_for_dict(seq, bcs, min_score)
-    return three_p_match_d
 
 
 def make_all_seqs(l):
@@ -222,131 +294,6 @@ def rev_c(seq):
     return seq
 
 
-def three_p_demultiplex(read, d, add_umi, linked_bcds, linked_bcds_no_N, min_score, keep_barcodes,
-                        reverse_complement=False):
-    """
-	read is a dnaio read
-	d is the relevant match dictionary
-	length is the length of the 3' barcodes (it assumes they're all the same)
-	"""
-
-    if reverse_complement:  # if it's paired end reverse complement the reverse read
-        sequence = rev_c(read.sequence)
-        qualities = read.qualities[::-1]  # just reverse - can't complement qualities!
-    else:
-        sequence = read.sequence
-        qualities = read.qualities
-
-    # find the positions of the non-N characters relative to 3' end
-    # TODO precalculate these for faster operation - make a dict of positions for each 5' bacordes linked 3' barcodes
-    bc_length_reference = len(linked_bcds[0])  # can use [0] because non-N guaranteed to be consistent
-    non_N_poses = [a - bc_length_reference for a, b in enumerate(linked_bcds[0]) if b != "N"]  # all negative
-
-    seq_length = len(sequence)
-    positions_to_extract = [x + seq_length for x in non_N_poses]
-
-    umi = ""  # initialise
-
-    if min(positions_to_extract) >= 0:  # ensure long enough
-
-        bc = ''.join(sequence[a] for a in positions_to_extract)
-
-        if "dont_build" == d:
-            assigned = score_barcode_for_dict(bc, linked_bcds_no_N, min_score, Ns_removed=True)
-        else:
-            assigned = d[bc]
-
-        # if reverse_complement:  # the sequence that will be removed
-        #     to_remove = read.sequence[0:len(assigned)]
-        # else:
-        #     # then it's not paired end, so we don't care
-        #     to_remove = ""
-
-        if assigned == "no_match":
-            to_remove = ""
-
-        else:  # ie there is a match - then we need to trim
-            
-            bc_length = len(assigned)
-            
-            # Find the positions in the read which contain the UMI
-            umi_poses = [a - bc_length for a, b in enumerate(assigned) if b == 'N']
-            umi_positions_to_extract = [x + seq_length for x in umi_poses]
-
-            # check it's long enough to contain UMIs, or that there are no UMIs
-            long_enough = False  # assume false
-            
-            if len(umi_poses) > 0:
-                if min(umi_positions_to_extract) >= 0:
-                    long_enough = True
-            if len(umi_poses) == 0:  # no UMI
-                long_enough = True
-
-            # Extract the UMI
-            if long_enough:
-                umi = ''.join(sequence[a] for a in umi_positions_to_extract)
-                length = len(assigned)
-                if not keep_barcodes:
-                    sequence = sequence[0:(len(read) - length)]
-                    qualities = qualities[0:(len(read.qualities) - length)]
-
-                if reverse_complement:  # the sequence that will be removed
-                    to_remove = read.sequence[0:len(assigned)]
-                else:
-                    # then it's not paired end, so we don't care
-                    to_remove = ""
-            
-            else:  # barcode assigned, but read too short to contain full umi
-                assigned = "no_match"
-                to_remove = ""
-
-    else:  # read was too short for barcode to be extracted
-        assigned = "no_match"
-        to_remove = ""
-
-    if add_umi:
-        if "rbc:" in read.name:
-            read.name = read.name + umi
-        else:
-            read.name = read.name + "rbc:" + umi
-
-    if reverse_complement:
-        # spin back round
-        read.sequence = rev_c(sequence)
-        read.qualities = qualities[::-1]
-    else:
-        read.sequence = sequence
-        read.qualities = qualities
-
-
-    return read, assigned, umi, to_remove
-
-
-# TODO link three_p_mismatches to input
-def make_dict_of_3p_bc_dicts(linked_bcds, three_p_mismatches, dont_build_reference):
-    """
-	this function makes a different dictionary for each 5' barcode
-	it also checks that they're all the same length
-	"""
-
-    d = {}
-    min_score_d = {}
-    for five_p_bc, three_p_bcs in linked_bcds.items():
-        if len(three_p_bcs) > 0:  # ie this 5' barcode has 3' barcodes
-            # check they're consistent
-            check_N_position(three_p_bcs, "3")
-            # work out the min score - only do first one because already checked they're consistent
-            min_score = len([a for a, b in enumerate(three_p_bcs[0]) if b != "N"]) - three_p_mismatches
-            if dont_build_reference:
-                d[five_p_bc] = "dont_build"
-            else:
-                this_dict = make_3p_bc_dict(three_p_bcs, min_score)
-                d[five_p_bc] = this_dict
-            min_score_d[five_p_bc] = min_score
-
-    return d, min_score_d
-
-
 class WorkerProcess(Process):  # /# have to have "Process" here to enable worker.start()
     """
 	The worker repeatedly reads chunks of data from the read_pipe, runs the pipeline on it
@@ -357,388 +304,116 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
 
     def __init__(self, index,
                  read_pipe, need_work_queue,
-                 adapter, output_directory,
-                 five_p_bcs, three_p_bcs,
+                 output_directory,
+                 barcodes, coordinates,
                  save_name,
                  total_demultiplexed,
-                 total_reads_assigned, total_reads_qtrimmed, total_reads_adaptor_trimmed,
-                 total_reads_5p_no_3p,
+                 total_reads_assigned,
                  ultra_mode,
-                 min_score_5_p, three_p_mismatches,
-                 linked_bcds,
-                 three_p_trim_q,
-                 q5,
-                 i2,
-                 adapter2,
-                 min_trim,
+                 min_score_5_p, 
                  ignore_no_match,
-                 final_min_length,
                  dont_build_reference,
-                 keep_barcode):
+                 trim_sequences):
         super().__init__()
         self._id = index  # the worker id
         self._read_pipe = read_pipe  # the pipe the reader reads data from
         self._need_work_queue = need_work_queue  # worker adds its id to this queue when it needs work
-        self._end_qc = three_p_trim_q  # quality score to trim qc from 3' end
-        self._start_qc = q5  # quality score to trim qc from 5' end
+
         self._total_demultiplexed = total_demultiplexed  # a queue which keeps track of the total number of reads processed
         self._total_reads_assigned = total_reads_assigned  # a queue which keeps track of the total number of reads assigned to sample files
-        self._total_reads_qtrimmed = total_reads_qtrimmed  # a queue which keeps track of the total number of reads quality trimmed
-        self._total_reads_adaptor_trimmed = total_reads_adaptor_trimmed  # a queue which keeps track of the total number of reads adaptor trimmed
-        self._total_reads_5p_no_3p = total_reads_5p_no_3p  # a queue which keeps track of how many reads have correct 5p BC but cannot find 3p BC
-        self._adapter = adapter  # the 3' adapter
-        self._final_min_length = final_min_length  # length of final written reads
-        self._three_p_bcs = three_p_bcs  # not sure we need this? A list of all the 3' barcodes. But unecessary because of "linked_bcds"?
+
         self._save_name = save_name  # the name to save the output fastqs
-        self._five_p_barcodes_pos, self._five_p_umi_poses = find_bc_and_umi_pos(five_p_bcs)
-        self._five_p_bc_dict = make_5p_bc_dict(five_p_bcs, min_score_5_p, dont_build_reference)
-        self._min_score_5_p = min_score_5_p  #
-        self._linked_bcds = linked_bcds  # which 3' barcodes each 5' bc is linked - a dictionary
-        self._three_p_bc_dict_of_dicts, self._min_score_d = make_dict_of_3p_bc_dicts(self._linked_bcds,
-                                                                                     three_p_mismatches,
-                                                                                     dont_build_reference)  # a dict of dicts - each 5' barcodes has
-        # a dict of which 3' barcode matches the given sequence, which is also a dict
+        self._five_p_barcodes_pos, self._five_p_umi_poses = find_bc_and_umi_pos(barcodes)
+        self._five_p_bc_dict = make_5p_bc_dict(barcodes, min_score_5_p, dont_build_reference)
+        self._min_score_5_p = min_score_5_p  
         self._ultra_mode = ultra_mode
         self._output_directory = output_directory
-        self._i2 = i2  # paired end file name, or false
-        self._adapter2 = adapter2
-        self._min_trim = min_trim
+
         self._ignore_no_match = ignore_no_match
-        self._barcodes_no_N = remove_Ns_from_barcodes(five_p_bcs)
-        self._linked_bcds_no_N = {key: remove_Ns_from_barcodes(value) for (key, value) in linked_bcds.items()}
-        self._keep_barcode = keep_barcode
+        self._barcodes_no_N = remove_Ns_from_barcodes(barcodes)
 
-    def trim_and_cut(self, read, cutter, reads_quality_trimmed, reads_adaptor_trimmed):
-        # even more first trim by 
-        print(ReaderProcess)
-        # /# first, trim by quality score
-        q_start, q_stop = quality_trim_index(read.qualities, self._start_qc, self._end_qc)
-        print(q_start)
-        print(q_stop)
-        prev_length = len(read.sequence)
-        read = read[q_start:q_stop]
-        print(read)
-        print("")
-        if not len(read.sequence) == prev_length:
-            # then it was trimmed
-            reads_quality_trimmed += 1
-
-        # /# then, trim adapter
-        prev_length = len(read.sequence)
-        read = cutter(read, ModificationInfo(read))
-        if not len(read.sequence) == prev_length:
-            # then it was trimmed
-            trimmed = True
-            reads_adaptor_trimmed += 1
-        else:
-            trimmed = False
-
-        if prev_length - len(read.sequence) >= self._min_trim:
-            min_trimmed = True
-        else:
-            min_trimmed = False
-
-        return read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed
+        self._trim_sequences = trim_sequences
+        self._coordinates = coordinates
 
     def run(self):
-
+        
+        
         while True:  # /# once spawned, this keeps running forever, until poison pill recieved
-            if self._i2 is False:  # then it's single end
-                # Notify reader that we need data
-                self._need_work_queue.put(self._id)
+            # Notify reader that we need data
+            self._need_work_queue.put(self._id)
 
-                # /# get some data
-                chunk_index = self._read_pipe.recv()
+            # /# get some data
+            chunk_index = self._read_pipe.recv()
 
-                # /# check there's no error
-                if chunk_index == -1:  # /# poison pill from Sina
-                    # reader is done
-                    break
-                elif chunk_index == -2:
-                    # An exception has occurred in the reader
-                    e, tb_str = self._read_pipe.recv()
-                    raise e
+            # /# check there's no error
+            if chunk_index == -1:  # /# poison pill from Sina
+                # reader is done
+                break
+            elif chunk_index == -2:
+                # An exception has occurred in the reader
+                e, tb_str = self._read_pipe.recv()
+                raise e
 
-                # /# otherwise if we have no error, run...
-                # /# get some bytes
-                data = self._read_pipe.recv_bytes()
-                infiles = io.BytesIO(data)
+            # /# otherwise if we have no error, run...
+            # /# get some bytes
+            data = self._read_pipe.recv_bytes()
+            infiles = io.BytesIO(data)
 
-                # Define the cutter
-                adapter = [BackAdapter(self._adapter, max_error_rate=0.1, min_overlap=1)]
-                cutter = AdapterCutter(adapter, times=1)
+            # /# process the reads
+            #processed_reads = []
+            #this_buffer_dict = {}
+            reads_written = 0
+            assigned_reads = 0
 
-                # /# process the reads
-                processed_reads = []
-                this_buffer_dict = {}
-                reads_written = 0
-                assigned_reads = 0
-                reads_quality_trimmed = 0
-                reads_adaptor_trimmed = 0
-                five_no_three_reads = 0
 
-                for read in InputFiles(infiles).open():
-                    reads_written += 1
-                    umi = ""
+            for read in InputFiles(infiles).open():
+                reads_written += 1
+                #umi = ""
+                
+                # trim_sequences = [(30, 34), (80, 88), (90, 100)]
+                trim_sequences = self._trim_sequences
+                if trim_sequences:
+                    read = user_trim(read, trim_sequences)
+                
+                
+                # /# demultiplex at the 5' end ###
+                read.name = read.name.replace(" ", "").replace("/", "").replace("\\",
+                                                                                "")  # remove bad characters
 
-                    read, trimmed, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed = self.trim_and_cut(read,
-                                                                                                                 cutter,
-                                                                                                                 reads_quality_trimmed,
-                                                                                                                 reads_adaptor_trimmed)
+                read, five_p_bc = five_p_demulti(read,
+                                                                    self._five_p_barcodes_pos,
+                                                                    #self._five_p_umi_poses,
+                                                                    self._five_p_bc_dict,
+                                                                    #add_umi=True,
+                                                                    barcodes_no_N=self._barcodes_no_N,
+                                                                    min_score=self._min_score_5_p)
+                                                                    #keep_barcode=self._keep_barcode)
+                                                                    
+                
+                
+                
 
-                    # /# demultiplex at the 5' end ###
-                    read.name = read.name.replace(" ", "").replace("/", "").replace("\\",
-                                                                                    "")  # remove bad characters
+                if five_p_bc != "no_match":
+                    x_coord = self._coordinates[five_p_bc][0]
+                    y_coord = self._coordinates[five_p_bc][1]
+                    read.name = read.name + " B0:Z:" + five_p_bc + " B1:Z:" + x_coord + " B2:Z:" + y_coord
+                    #print(read.name)
+                    
+                    filename = 'matched-1000.fastq.gz'
 
-                    read, five_p_bc, umi, to_remove = five_p_demulti(read,
-                                                                     self._five_p_barcodes_pos,
-                                                                     self._five_p_umi_poses,
-                                                                     self._five_p_bc_dict,
-                                                                     add_umi=True,
-                                                                     barcodes_no_N=self._barcodes_no_N,
-                                                                     min_score=self._min_score_5_p,
-                                                                     keep_barcode=self._keep_barcode)
+                    if os.path.exists(filename):
+                        append_write = 'ab'  # append if already exists
+                    else:
+                        append_write = 'wb'  # make a new file if not
 
-                    # /# demultiplex at the 3' end
-                    # First, check if this 5' barcode has any 3' barcodes
-                    try:
-                        linked = self._linked_bcds[five_p_bc]
-                    except KeyError:
-                        linked = "_none_"
-
-                    if linked == "_none_":  # no 3' barcodes linked to this 3' barcode, this includes "no_match" 5' barcdoes
-                        comb_bc = '_5bc_' + five_p_bc
-
-                        if len(read) >= self._final_min_length:
-                            try:
-                                this_buffer_dict[comb_bc].append(read)
-                            except KeyError:
-                                this_buffer_dict[comb_bc] = [read]
-
-                        if not five_p_bc == "no_match":
-                            assigned_reads += 1
-
-                    elif min_trimmed:  # if it is linked to 3' barcodes and has been trimmed
-                        read, three_p_bc, umi_3, to_remove_3 = three_p_demultiplex(read,
-                                                                                   self._three_p_bc_dict_of_dicts[
-                                                                                       five_p_bc],
-                                                                                   add_umi=True,
-                                                                                   linked_bcds=self._linked_bcds[
-                                                                                       five_p_bc],
-                                                                                   linked_bcds_no_N=
-                                                                                   self._linked_bcds_no_N[five_p_bc],
-                                                                                   min_score=self._min_score_d[
-                                                                                       five_p_bc],
-                                                                                   keep_barcodes=self._keep_barcode)
-
-                        if not three_p_bc == "no_match":
-                            assigned_reads += 1
-
-                        if three_p_bc == "no_match":
-                            five_no_three_reads += 1
-
-                        comb_bc = '_5bc_' + five_p_bc + '_3bc_' + three_p_bc
-
-                        if len(read) >= self._final_min_length:
-                            try:
-                                this_buffer_dict[comb_bc].append(read)
-                            except KeyError:
-                                this_buffer_dict[comb_bc] = [read]
-
-                    else:  # linked to 3' barcode but wasn't trimmed so can't assign
-                        comb_bc = '_5bc_' + five_p_bc + '_3bc_' + 'no_match'
-                        try:
-                            this_buffer_dict[comb_bc].append(read)
-                        except KeyError:
-                            this_buffer_dict[comb_bc] = [read]
-
-                ## Write out! ##
-                for demulti_type, reads in this_buffer_dict.items():
-                    write_tmp_files(output_dir=self._output_directory,
-                                    save_name=self._save_name,
-                                    demulti_type=demulti_type,
-                                    worker_id=self._id,
-                                    reads=reads,
-                                    ultra_mode=self._ultra_mode,
-                                    ignore_no_match=self._ignore_no_match)
-
-            else:  # if paired end
-                # Notify reader that we need data
-                self._need_work_queue.put(self._id)
-
-                # /# get some data
-                chunk_index = self._read_pipe.recv()
-
-                # /# check there's no error
-                if chunk_index == -1:  # /# poison pill from Sina
-                    # reader is done
-                    break
-                elif chunk_index == -2:
-                    # An exception has occurred in the reader
-                    e, tb_str = self._read_pipe.recv()
-                    raise e
-
-                # /# otherwise if we have no error, run...
-                # /# get some bytes
-                data1 = self._read_pipe.recv_bytes()
-                infiles1 = io.BytesIO(data1)
-                data2 = self._read_pipe.recv_bytes()
-                infiles2 = io.BytesIO(data2)
-
-                # Define the cutter
-                adapter1 = [BackAdapter(self._adapter, max_error_rate=0.1, min_overlap=1)]
-                adapter2 = [BackAdapter(self._adapter2, max_error_rate=0.1, min_overlap=1)]
-                cutter1 = AdapterCutter(adapter1, times=1)
-                cutter2 = AdapterCutter(adapter2, times=1)
-
-                # /# process the reads
-                processed_reads = []
-                this_buffer_dict_1 = {}
-                this_buffer_dict_2 = {}
-                reads_written = 0
-                assigned_reads = 0
-                reads_quality_trimmed = 0
-                reads_adaptor_trimmed = 0
-                five_no_three_reads = 0
-
-                for read1, read2 in zip(InputFiles(infiles1).open(), InputFiles(infiles2).open()):
-                    # First, check that they have the same name
-                    # assert read1.name == read2.name, "Paired reads are mismatched"
-
-                    umi = ""
-                    reads_written += 1
-                    # /# first, trim by quality score
-                    read1, trimmed1, reads_quality_trimmed, reads_adaptor_trimmed, min_trimmed1 = self.trim_and_cut(
-                        read1,
-                        cutter1,
-                        reads_quality_trimmed,
-                        reads_adaptor_trimmed)
-
-                    read2, trimmed2, ignore, ignore_also, min_trimmed2 = self.trim_and_cut(read2,
-                                                                                           cutter2,
-                                                                                           reads_quality_trimmed,
-                                                                                           reads_adaptor_trimmed)
-
-                    # /# demultiplex at the 5' end ###
-                    read1.name = read1.name.replace(" ", "").replace("/", "").replace("\\",
-                                                                                      "")  # remove bad characters
-                    read2.name = read2.name.replace(" ", "").replace("/", "").replace("\\",
-                                                                                      "")  # remove bad characters
-
-                    # demultiplex based on 5' end
-                    read1, five_p_bc, umi, to_remove_5 = five_p_demulti(read1,
-                                                                        self._five_p_barcodes_pos,
-                                                                        self._five_p_umi_poses,
-                                                                        self._five_p_bc_dict,
-                                                                        add_umi=False,
-                                                                        barcodes_no_N=self._barcodes_no_N,
-                                                                        min_score=self._min_score_5_p,
-                                                                        keep_barcode=self._keep_barcode)
-
-                    # add the 5' umi to each
-                    for read in [read1, read2]:
-                        if not "rbc:" in read.name:
-                            read.name = read.name + "rbc:" + umi
-                        else:  # if rbc is already there
-                            read.name = read.name + umi
-
-                    # /# demultiplex at the 3' end
-                    # First, check if this 5' barcode has any 3' barcodes
-                    try:
-                        linked = self._linked_bcds[five_p_bc]
-                    except:
-                        linked = "_none_"
-
-                    if linked == "_none_":  # no 3' barcodes linked to this 5' barcode, this includes "no_match" 5'
-                        # barcdoes
-                        comb_bc = '_5bc_' + five_p_bc
-
-                        # remove the 5' barcoded adapter from reverse read
-                        read2 = remove_mate_adapter(read=read2,
-                                                    to_remove=to_remove_5,
-                                                    bcd=five_p_bc,
-                                                    trimmed=trimmed2)
-
-                        if len(read1) >= self._final_min_length and len(read2) >= self._final_min_length:
-                            try:
-                                this_buffer_dict_1[comb_bc].append(read1)
-                                this_buffer_dict_2[comb_bc].append(read2)
-                            except KeyError:
-                                this_buffer_dict_1[comb_bc] = [read1]
-                                this_buffer_dict_2[comb_bc] = [read2]
-
-                        if not five_p_bc == "no_match":
-                            assigned_reads += 1
-
-                    else:  # if there's a linked 3' barcode, no need to check if trimmed b/c P.E.
-                        read2, three_p_bc, umi_3, to_remove_3 = three_p_demultiplex(read2,
-                                                                                    self._three_p_bc_dict_of_dicts[
-                                                                                        five_p_bc],
-                                                                                    add_umi=False,
-                                                                                    linked_bcds=self._linked_bcds[
-                                                                                        five_p_bc],
-                                                                                    min_score=self._min_score_d[
-                                                                                        five_p_bc],
-                                                                                    linked_bcds_no_N=
-                                                                                    self._linked_bcds_no_N[five_p_bc],
-                                                                                    reverse_complement=True,
-                                                                                    keep_barcodes=self._keep_barcode)
-
-                        # add the second umi
-                        for read in [read1, read2]:
-                            if not "rbc:" in read.name:
-                                read.name = read.name + "rbc:" + umi_3
-                            else:  # if rbc is already there
-                                read.name = read.name + umi_3
-
-                        # remove the 5' bcded adapter from the reverse read
-                        read2 = remove_mate_adapter(read=read2,
-                                                    to_remove=to_remove_5,
-                                                    bcd=five_p_bc,
-                                                    trimmed=trimmed2)
-                        # remove the 3' adapter from the forward read
-                        read1 = remove_mate_adapter(read=read1,
-                                                    to_remove=to_remove_3,
-                                                    bcd=three_p_bc,
-                                                    trimmed=trimmed1)
-
-                        if not three_p_bc == "no_match":
-                            assigned_reads += 1
-
-                        if three_p_bc == "no_match":
-                            five_no_three_reads += 1
-
-                        comb_bc = '_5bc_' + five_p_bc + '_3bc_' + three_p_bc
-
-                        if len(read1) >= self._final_min_length and len(read2) >= self._final_min_length:
-                            try:
-                                this_buffer_dict_1[comb_bc].append(read1)
-                                this_buffer_dict_2[comb_bc].append(read2)
-                            except KeyError:
-                                this_buffer_dict_1[comb_bc] = [read1]
-                                this_buffer_dict_2[comb_bc] = [read2]
-
-                ## Write out! ##
-
-                for demulti_type, reads in this_buffer_dict_1.items():
-                    demulti_type = demulti_type + "_Fwd"
-                    write_tmp_files(output_dir=self._output_directory,
-                                    save_name=self._save_name,
-                                    demulti_type=demulti_type,
-                                    worker_id=self._id,
-                                    reads=reads,
-                                    ultra_mode=self._ultra_mode,
-                                    ignore_no_match=self._ignore_no_match)
-
-                for demulti_type, reads in this_buffer_dict_2.items():
-                    demulti_type = demulti_type + "_Rev"
-                    write_tmp_files(output_dir=self._output_directory,
-                                    save_name=self._save_name,
-                                    demulti_type=demulti_type,
-                                    worker_id=self._id,
-                                    reads=reads,
-                                    ultra_mode=self._ultra_mode,
-                                    ignore_no_match=self._ignore_no_match)
+                    with gzip.open(filename, append_write) as file:
+                        this_out = []
+                        this_out.append("@" + read.name)
+                        this_out.append(read.sequence)
+                        this_out.append("+")
+                        this_out.append(read.qualities)
+                        output = '\n'.join(this_out) + '\n'
+                        file.write(output.encode())
 
             # LOG reads processed
             prev_total = self._total_demultiplexed.get()
@@ -752,48 +427,10 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                 last_printed = prev_total[1]
             self._total_demultiplexed.put([new_total, last_printed])
 
-            # LOG quality trimming
-            prev_total = self._total_reads_qtrimmed.get()
-            new_total = prev_total + reads_quality_trimmed
-            self._total_reads_qtrimmed.put(new_total)
-
-            # LOG adaptor trimming
-            prev_total = self._total_reads_adaptor_trimmed.get()
-            new_total = prev_total + reads_adaptor_trimmed
-            self._total_reads_adaptor_trimmed.put(new_total)
-
             # LOG reads assigned
             prev_total = self._total_reads_assigned.get()
             new_total = prev_total + assigned_reads
             self._total_reads_assigned.put(new_total)
-
-            # LOG 5' no 3' reads
-            prev_total = self._total_reads_5p_no_3p.get()
-            new_total = prev_total + five_no_three_reads
-            self._total_reads_5p_no_3p.put(new_total)
-
-
-def remove_mate_adapter(read, to_remove, bcd, trimmed):
-    """
-    This function looks for the barcoded adapter (UMI-specific, not just Ns) in the mate read. It then checks
-    that not too much was removed
-    The idea is that if the forward read is B1B2B3B4B5AAAGGG..., where B is the barcode, then:
-    to_remove = B1B2B3B4B5
-    reverse read = CCCTTTb5b4b3b2b1iiiiii where i is the illumina adapter for the reverse read
-    the reverse read then gets trimmed to CCCTTTb5b4b3b2b1
-    So now we just look for bbbbb, which is the reverse complement of what was removed
-    """
-
-    if trimmed:  # then remove the barcode which should, by definition, be there
-        read = read[0:len(read.sequence) - len(bcd)]
-    else:
-        if len(to_remove) > 0:
-            remove_rc = rev_c(to_remove)  # this is now "b5b4b3b2b1"
-            adapter = [BackAdapter(remove_rc, max_error_rate=0.1, min_overlap=2)]
-            cutter = AdapterCutter(adapter, times=1)
-            read = cutter(read, ModificationInfo(read))
-
-    return read
 
 
 def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
@@ -862,25 +499,19 @@ def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
             file.write(output.encode())
 
 
-def five_p_demulti(read, five_p_bc_pos, five_p_umi_poses,
-                   five_p_bc_dict, add_umi, keep_barcode, barcodes_no_N=[], min_score=0):
+def five_p_demulti(read, five_p_bc_pos,
+                   five_p_bc_dict, barcodes_no_N=[], min_score=0):
     """
     this function demultiplexes on the 5' end
     """
     sequence_length = len(read.sequence)
-    this_five_p_umi = ""
-
-    # check if "rbc:" already in header
-    if "rbc:" in read.name:
-        to_add = ""
-    else:  # if not
-        to_add = "rbc:"
 
     if sequence_length > max(five_p_bc_pos):
         # find best barcode match
-        this_bc_seq = ''.join([read.sequence[i] for i in five_p_bc_pos])
-
+        # this_bc_seq = ''.join([read.sequence[i] for i in five_p_bc_pos])
+        this_bc_seq = read.sequence
         if "dont_build" in five_p_bc_dict:
+            # print(this_bc_seq)
             winner = score_barcode_for_dict(this_bc_seq, barcodes_no_N, min_score, Ns_removed=True)
         else:
             winner = five_p_bc_dict[this_bc_seq]
@@ -888,32 +519,8 @@ def five_p_demulti(read, five_p_bc_pos, five_p_umi_poses,
         # store what sequence will be removed
         if sequence_length < len(winner):  # read is too short to contain barcode
             winner = "no_match"
-            to_remove = ""
-        else:
-            to_remove = read.sequence[0:len(winner)]
-
-        if not winner == "no_match":
-            # /# find umi sequence
-            this_five_p_umi = ''.join([read.sequence[i] for i in five_p_umi_poses[winner]])
-
-            if not keep_barcode:
-                # /# update read and read header
-                read.sequence = read.sequence[len(winner):]
-                read.qualities = read.qualities[len(winner):]
-
-            if add_umi:
-                # to read header add umi and 5' barcode info
-                read.name = (read.name.replace(" ", "") + to_add + this_five_p_umi)
-        else:  # if no match
-            read.name = read.name + to_add
-
-    else:  # if read was too short to assign
-        winner = "no_match"
-        read.name = read.name + to_add
-        to_remove = ""
-
-    return read, winner, this_five_p_umi, to_remove
-
+            
+    return read, winner
 
 def find_bc_and_umi_pos(barcodes):
     """
@@ -933,12 +540,12 @@ def find_bc_and_umi_pos(barcodes):
     return bc_pos, umi_poses
 
 
-def start_workers(n_workers, input_file, need_work_queue, adapter,
-                  five_p_bcs, three_p_bcs, save_name, total_demultiplexed, total_reads_assigned,
-                  total_reads_qtrimmed, total_reads_adaptor_trimmed, total_reads_5p_no_3p,
-                  min_score_5_p, three_p_mismatches, linked_bcds, three_p_trim_q,
-                  ultra_mode, output_directory, final_min_length, q5, i2, adapter2, min_trim,
-                  ignore_no_match, dont_build_reference, keep_barcode):
+def start_workers(n_workers, input_file, need_work_queue, #adapter,
+                  barcodes, coordinates, save_name, total_demultiplexed, total_reads_assigned,
+                  min_score_5_p, #three_p_mismatches, linked_bcds, three_p_trim_q,
+                  ultra_mode, output_directory, #final_min_length, q5, i2, adapter2, min_trim,
+                  ignore_no_match, dont_build_reference, #keep_barcode, trim_sequences):
+                  trim_sequences):
     """
 	This function starts all the workers
 	"""
@@ -948,9 +555,6 @@ def start_workers(n_workers, input_file, need_work_queue, adapter,
 
     total_demultiplexed.put([0, 0])  # [total written, last time it was printed] - initialise [0,0]
     total_reads_assigned.put(0)
-    total_reads_qtrimmed.put(0)
-    total_reads_adaptor_trimmed.put(0)
-    total_reads_5p_no_3p.put(0)
 
     for index in range(n_workers):
         # create a pipe to send data to this worker
@@ -961,40 +565,27 @@ def start_workers(n_workers, input_file, need_work_queue, adapter,
         worker = WorkerProcess(index=index,
                                read_pipe=conn_r,  # this is the "read_pipe"
                                need_work_queue=need_work_queue,  # worker tells the reader it needs work
-                               adapter=adapter,  # the 3' adapter to trim
                                output_directory=output_directory,
-                               five_p_bcs=five_p_bcs,
-                               three_p_bcs=three_p_bcs,
+                               barcodes=barcodes,
+                               coordinates=coordinates,
                                save_name=save_name,
                                total_demultiplexed=total_demultiplexed,
                                total_reads_assigned=total_reads_assigned,
-                               total_reads_qtrimmed=total_reads_qtrimmed,
-                               total_reads_adaptor_trimmed=total_reads_adaptor_trimmed,
-                               total_reads_5p_no_3p=total_reads_5p_no_3p,
                                ultra_mode=ultra_mode,
                                min_score_5_p=min_score_5_p,
-                               three_p_mismatches=three_p_mismatches,
-                               linked_bcds=linked_bcds,
-                               three_p_trim_q=three_p_trim_q,
-                               q5=q5,
-                               i2=i2,
-                               adapter2=adapter2,
-                               min_trim=min_trim,
                                ignore_no_match=ignore_no_match,
-                               final_min_length=final_min_length,
                                dont_build_reference=dont_build_reference,
-                               keep_barcode=keep_barcode)
+                               trim_sequences=trim_sequences
+                               )
 
         worker.start()
         workers.append(worker)
 
     return workers, all_conn_r, all_conn_w
 
-
 def concatenate_files(save_name, ultra_mode,
                       sbatch_compression,
                       output_directory,
-                      sample_names,
                       compression_threads=8):
     """
 	this function concatenates all the files produced by the 
@@ -1068,146 +659,31 @@ def concatenate_files(save_name, ultra_mode,
             for name in filenames:
                 os.remove(name)
 
-    if len(sample_names) > 0:  # ie the user has specified at least one sample name
-        for this_type in all_types:
-            sample_name_list = []
-            # check whether any of the keys in the dictionary match this type
-            for key, value in sample_names.items():
-                if key in this_type and "no_match" not in this_type:
-                    # check that if key doesn't contain 3' barcode, then the type does either
-                    if "_3bc_" in this_type:
-                        if "_3bc_" in key:
-                            sample_name_list.append(key)
-                    else:  # if 3' bc is not in the type, the by definition if won't be in the key
-                        sample_name_list.append(key)
-
-            if len(sample_name_list) == 1:  # check that only one name matches
-                if "Fwd" in this_type:
-                    os.system("mv " + this_type + ".fastq.gz " + output_directory + "ultraplex_" + save_name + "_" +
-                              sample_names[sample_name_list[0]] + "_Fwd.fastq.gz")
-                elif "Rev" in this_type:
-                    os.system("mv " + this_type + ".fastq.gz " + output_directory + "ultraplex_" + save_name + "_" +
-                              sample_names[sample_name_list[0]] + "_Rev.fastq.gz")
-                else:
-                    os.system("mv " + this_type + ".fastq.gz " + output_directory + "ultraplex_" + save_name + "_" +
-                              sample_names[sample_name_list[0]] + ".fastq.gz")
-            if len(sample_name_list) > 1:
-                print("Warning - unable to rename file as filename-sample combination was not unique")
-
-
 def clean_files(output_directory, save_name):
     files = glob.glob(output_directory + 'ultraplex_' + save_name + '*')
     for file in files:
         os.remove(file)
 
+def process_bcs(tsv, mismatch_5p):
+    barcodes = []
+    coordinates = {}
 
-def process_bcs(csv, mismatch_5p):
-    five_p_bcs = []
-    three_p_bcs = []
-    linked = {}
-    sample_names = {}
+    counter = 0  # all 5' barcodes must be consistent
 
-    counter_5 = 0  # all 5' barcodes must be consistent
-
-    with open(csv, 'r') as file:
+    with open(tsv, 'r') as file:
         for row in file:
-            counter_3 = 0  # 3' barcodes only have to be consistent for each 5' barcode
-            counter_5 += 1
+            counter += 1
             # First, find if theres a comma
-            line = row.rstrip().replace(" ", "")
-            comma_split = line.split(',')
+            line = row.split('\t')
+            barcodes.append(line[0])
+            coordinates[line[0]]=(line[1],line[2].strip()) #in case \n
+            
+    match_5p = len(barcodes[0]) - mismatch_5p
 
-            if len(comma_split) > 1:
-                if comma_split[1] == "":
-                    just_5p = True
-                else:
-                    just_5p = False
-            elif len(comma_split) == 1:
-                just_5p = True
-            else:
-                just_5p = False
-
-            if just_5p:
-                # then there's no 3' barcode
-                five_p_bcs.append(comma_split[0].split(":")[0].upper())
-                assert comma_split[0].count(":") <= 1, "multiple colons in 5' barcode"
-
-                if len(comma_split[0].split(":")) > 1:
-                    if comma_split[0].split(":")[1] != "":
-                        sample_names["5bc_" + comma_split[0].split(":")[0].upper()] = comma_split[0].split(":")[1]
-
-                if counter_5 == 1:
-                    fivelength = len(comma_split[0].rstrip().upper().replace("N", "").split(":")[0])
-                else:
-                    assert len(comma_split[0].rstrip().upper().replace("N", "").split(":")[
-                                   0]) == fivelength, "5' barcodes not consistent"
-            else:
-                # then we have 3 prime bcds
-                five_p_bcs.append(comma_split[0].split(":")[0].upper())
-                assert comma_split[0].count(":") <= 1, "multiple colons in 5' barcode"
-                if comma_split[0].count(":") == 1:
-                    assert comma_split[0].count(":")[
-                               1] == "", "You cannot name the 5' sample if it's linked to 3' barcodes (please remove 5' barcode name)"
-
-                if counter_5 == 1:
-                    fivelength = len(comma_split[0].rstrip().upper().replace("N", "").split(":")[0])
-                else:
-                    assert len(comma_split[0].rstrip().upper().replace("N", "").split(":")[
-                                   0]) == fivelength, "5' barcodes not consistent"
-
-                # find the 3' barcodes
-                three_ps = [b for a, b in enumerate(comma_split) if a > 0 and b != ""]
-                linked[comma_split[0]] = [a.split(":")[0].upper() for a in three_ps]
-
-                for bc_and_sample in three_ps:
-                    assert bc_and_sample.count(":") <= 1, "multiple colons in 3' barcode"
-
-                    bc = bc_and_sample.split(":")[0].upper()
-                    if len(bc_and_sample.split(":")) > 1:
-                        if not bc_and_sample.split(":")[1] == "":
-                            three_p_sample_name = bc_and_sample.split(":")[1]
-                            sample_names["5bc_" + comma_split[0].split(":")[0] + "_3bc_" + bc] = three_p_sample_name
-
-                    counter_3 += 1
-                    three_p_bcs.append(bc)
-
-                    if counter_3 == 1:
-                        threelength = len(bc.replace("N", ""))
-                    else:
-                        assert len(bc.replace("N", "")) == threelength, "3' barcodes not consistent"
-
-    assert len(sample_names) == len(set(sample_names.values())), "Sample names are not unique!"
-
-    # remove duplicates
-    five_p_bcs = list(dict.fromkeys(five_p_bcs))
-    three_p_bcs = list(dict.fromkeys(three_p_bcs))
-
-    match_5p = fivelength - mismatch_5p
-
-    return five_p_bcs, three_p_bcs, linked, match_5p, sample_names
-
-
-def print_header():
-    print("")
-    print(
-        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-    print(
-        "@@@@@   @@@@   .@@   @@@@@@@          @@         @@@@@@    (@@@@@        @@@    @@@@@@@         @@    @@@    @")
-    print(
-        "@@@@   @@@@    @@   ,@@@@@@@@@    @@@@@    @@@   @@@@   (   @@@@   @@@   @@    @@@@@@@   @@@@@@@@@@   #   @@@@")
-    print(
-        "@@@   &@@@    @@    @@@@@@@@@%   @@@@@         @@@@(   @    @@@         @@    @@@@@@@         @@@@@     @@@@@@")
-    print(
-        "@@    @@@    @@    @@@@@@@@@@   @@@@@    @@    @@@          @@   .@@@@@@@*   @@@@@@@    @@@@@@@@.   @    @@@@@")
-    print(
-        "@@@       @@@@.        @@@@@   @@@@@&   @@@.   &   &@@@@    @    @@@@@@@@         @          @    @@@@    @@@@")
-    print(
-        "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-    print("")
-
+    return barcodes, coordinates, match_5p
 
 def check_enough_space(output_directory, input_file,
-                       ignore_space_warning, ultra_mode, i2):
+                       ignore_space_warning, ultra_mode):
     # First, find the free space on the output directory
     if output_directory == "":
         output_directory = os.getcwd()
@@ -1218,8 +694,6 @@ def check_enough_space(output_directory, input_file,
     else:
         multiplier = 0.98
 
-    if not i2 == False:
-        multiplier = multiplier / 2
     # Find the size of the input file
     input_file_size = Path(input_file).stat().st_size
     if ignore_space_warning:
@@ -1252,7 +726,6 @@ def check_N_position(bcds, type):
 
 
 def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
-    print_header()
     start = time.time()
 
     ## PARSE COMMAND LINE ARGUMENTS ##
@@ -1265,25 +738,18 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
                           help='fastq file to be demultiplexed')
     # barcodes csv
     required.add_argument('-b', "--barcodes", type=str, required=True,
-                          help='barcodes for demultiplexing in csv format')
+                          help='barcodes for demultiplexing in tsv format')
     # output directory
     optional.add_argument('-d', "--directory", type=str, default="", nargs='?',
                           help="optional output directory")
     # 5' mismatches
     optional.add_argument('-m5', "--fiveprimemismatches", type=int, default=1, nargs='?',
                           help='number of mismatches allowed for 5prime barcode [DEFAULT 1]')
-    # 3' mismatches
-    optional.add_argument('-m3', "--threeprimemismatches", type=int, default=0, nargs='?',
-                          help='number of mismatches allowed for 3prime barcode [DEFAULT 0]')
-    # minimum quality score
-    optional.add_argument('-q', "--phredquality", type=int, default=30, nargs='?',
-                          help='phred quality score for 3prime end trimming')
+
     # threads
     optional.add_argument('-t', "--threads", type=int, default=4, nargs='?',
                           help='threads [DEFAULT 4]')
-    # adapter sequence
-    optional.add_argument('-a', "--adapter", type=str, default="AGATCGGAAGAGCGGTTCAG", nargs='?',
-                          help='sequencing adapter to trim [DEFAULT Illumina AGATCGGAAGAGCGGTTCAG]')
+
     # name of output file
     optional.add_argument('-o', "--outputprefix", type=str, default="demux", nargs='?',
                           help='prefix for output sequences [DEFAULT demux]')
@@ -1296,30 +762,15 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     # free space ignore warning
     optional.add_argument('-ig', "--ignore_space_warning", action='store_true', default=False,
                           help='whether to ignore warnings that there is not enough free space')
-    # minimum final length of read
-    optional.add_argument('-l', '--final_min_length', type=int, default=20,
-                          nargs='?', help="minimum length of the final outputted reads")
-    # start qc
-    optional.add_argument("-q5", '--phredquality_5_prime', type=int, default=0,
-                          nargs='?', help="quality trimming minimum score from 5' end - use with caution!")
-    # paired end file
-    optional.add_argument("-i2", "--input_2", type=str, default="", nargs="?",
-                          help="Optional second fastq.gz input for paired end data")
-    # adaptor for paired end read
-    optional.add_argument("-a2", "--adapter2", type=str, default="AGATCGGAAGAGCGTCGTG",
-                          nargs="?",
-                          help="sequencing adaptor to trim for the reverse read [Default AGATCGGAAGAGCGTCGTG]")
-    optional.add_argument("-mt", "--min_trim", type=int, default=3, nargs="?",
-                          help=(
-                              "When using single end reads for 3' demultiplexing, this is the minimum adapter trimming amount for a 3'"
-                              "barcode to be detected. Default = 3"))
     optional.add_argument("-inm", "--ignore_no_match", action="store_true", default=False,
-                          help="Do not write reads for which there is no match.")
+                           help="Do not write reads for which there is no match.")
     optional.add_argument("-dbr", "--dont_build_reference", default=False, action="store_true",
                           help="Skip the reference building step - for long barcodes this will improve speed.")
-    optional.add_argument("-kbc", "--keep_barcode", default=False, action="store_true",
-                          help="Do not remove barcodes/UMIs from the read (UMIs will still be moved to the "
-                               "read header)")
+    optional.add_argument("-ts","--trim-sequences", type=int, default=None, nargs='+', 
+                        help="Trims from the barcodes in the input file\n" \
+                        "The bases given in the list of tuples as START END START END .. where\n" \
+                        "START is the integer position of the first base (0 based) and END is the integer\n" \
+                        "position of the last base.\nTrimmng sequences can be given several times.")
 
     parser._action_groups.append(optional)
     args = parser.parse_args()
@@ -1342,27 +793,16 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     logging.info(args)
 
     file_name = args.inputfastq
-    barcodes_csv = args.barcodes
+    barcodes_tsv = args.barcodes
     mismatch_5p = args.fiveprimemismatches
-    three_p_mismatches = args.threeprimemismatches
-    three_p_trim_q = args.phredquality
     threads = args.threads
-    adapter = args.adapter
-    adapter2 = args.adapter2
     save_name = args.outputprefix
     sbatch_compression = args.sbatchcompression
     ultra_mode = args.ultra
     ignore_space_warning = args.ignore_space_warning
-    final_min_length = args.final_min_length
-    q5 = args.phredquality_5_prime
-    i2 = args.input_2
-    min_trim = args.min_trim
     ignore_no_match = args.ignore_no_match
     dont_build_reference = args.dont_build_reference
-    keep_barcode = args.keep_barcode
 
-    if i2 == "":
-        i2 = False
 
     if ultra_mode:
         print("Warning - ultra mode selected. This will generate very large temporary files!")
@@ -1372,15 +812,34 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
             print("sbatch_compression can only be used in conjunction with ultra mode")
             print("setting sbatch_compression to false")
             sbatch_compression = False
+    
+    if args.trim_sequences is not None \
+    and (len(args.trim_sequences) % 2 != 0 or min(args.trim_sequences) < 0): 
+        raise ValueError("Invalid trimming sequences given " \
+                         "The number of positions given must be even and they must fit into the barcode length.")
+    
+    # Make the input trim coordinates a list of tuples
+    trim_sequences = None
+    if args.trim_sequences is not None:
+        trim_sequences = list()
+        sorted_seqs = args.trim_sequences
+        #sorted_seqs.sort() #removed for now because of -1 testing
+
+        for i in range(len(sorted_seqs) - 1):
+            if i % 2 == 0:
+                trim_sequences.append((sorted_seqs[i], 
+                                       sorted_seqs[i+1]))
 
     # assert output_directory=="" or output_directory[len(output_directory)-1]=="/", "Error! Directory must end with '/'"
 
-    check_enough_space(output_directory, file_name, ignore_space_warning, ultra_mode, i2)
+    #check_enough_space(output_directory, file_name, ignore_space_warning, ultra_mode, i2)
+    check_enough_space(output_directory, file_name, ignore_space_warning, ultra_mode)
 
     # process the barcodes csv
-    five_p_bcs, three_p_bcs, linked_bcds, min_score_5_p, sample_names = process_bcs(barcodes_csv, mismatch_5p)
-
-    check_N_position(five_p_bcs, "5")  # check 3' later so that different 5' barcodes can have different types of 3' bcd
+    #five_p_bcs, three_p_bcs, linked_bcds, min_score_5_p, sample_names = process_bcs(barcodes_tsv, mismatch_5p)
+    barcodes, coordinates, min_score_5_p = process_bcs(barcodes_tsv, mismatch_5p)
+    
+    check_N_position(barcodes, "5")  # check 3' later so that different 5' barcodes can have different types of 3' bcd
 
     # remove files from previous runs
     clean_files(output_directory, save_name)
@@ -1390,46 +849,32 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     need_work_queue = Queue()
     total_demultiplexed = Queue()
     total_reads_assigned = Queue()
-    total_reads_qtrimmed = Queue()
-    total_reads_adaptor_trimmed = Queue()
-    total_reads_5p_no_3p = Queue()
+
 
     # /# make a bunch of workers
     workers, all_conn_r, all_conn_w = start_workers(n_workers=threads,
                                                     input_file=file_name,
                                                     need_work_queue=need_work_queue,
-                                                    adapter=adapter,
-                                                    five_p_bcs=five_p_bcs,
-                                                    three_p_bcs=three_p_bcs,
+                                                    barcodes=barcodes,
+                                                    coordinates=coordinates,
                                                     save_name=save_name,
                                                     total_demultiplexed=total_demultiplexed,
                                                     total_reads_assigned=total_reads_assigned,
-                                                    total_reads_qtrimmed=total_reads_qtrimmed,
-                                                    total_reads_adaptor_trimmed=total_reads_adaptor_trimmed,
-                                                    total_reads_5p_no_3p=total_reads_5p_no_3p,
                                                     min_score_5_p=min_score_5_p,
-                                                    three_p_mismatches=three_p_mismatches,
-                                                    linked_bcds=linked_bcds,
-                                                    three_p_trim_q=three_p_trim_q,
                                                     ultra_mode=ultra_mode,
                                                     output_directory=output_directory,
-                                                    q5=q5,
-                                                    i2=i2,
-                                                    adapter2=adapter2,
-                                                    min_trim=min_trim,
                                                     ignore_no_match=ignore_no_match,
-                                                    final_min_length=final_min_length,
                                                     dont_build_reference=dont_build_reference,
-                                                    keep_barcode=keep_barcode)
-
+                                                    trim_sequences=trim_sequences)
+    
     print("Demultiplexing...")
     reader_process = ReaderProcess(file_name, all_conn_w,
-                                   need_work_queue, buffer_size, i2)
+                                   need_work_queue, buffer_size)
     reader_process.daemon = True
     reader_process.run()
 
-    concatenate_files(save_name, ultra_mode, sbatch_compression, output_directory, sample_names)
-
+    # concatenate_files(save_name, ultra_mode, sbatch_compression, output_directory, sample_names)
+    concatenate_files(save_name, ultra_mode, sbatch_compression, output_directory)
     total_processed_reads = total_demultiplexed.get()[0]
     runtime_seconds = str((time.time() - start) // 1)
     finishing_msg = "Demultiplexing complete! " + str(
@@ -1438,21 +883,8 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     logging.info(finishing_msg)
 
     # More stats for logging
-    total_qtrim = total_reads_qtrimmed.get()
-    total_qtrim_percent = (total_qtrim / total_processed_reads) * 100
-    total_adaptortrim = total_reads_adaptor_trimmed.get()
-    total_adaptortrim_percent = (total_adaptortrim / total_processed_reads) * 100
-    total_5p_no3 = total_reads_5p_no_3p.get()
-    total_5p_no3_percent = (total_5p_no3 / total_processed_reads) * 100
     total_ass = total_reads_assigned.get()
     total_ass_percent = (total_ass / total_processed_reads) * 100
-    qmsg = str(total_qtrim) + " (" + str(round_sig(total_qtrim_percent, 3)) + "%) reads quality trimmed"
-    logging.info(qmsg)
-    amsg = str(total_adaptortrim) + " (" + str(round_sig(total_adaptortrim_percent, 3)) + "%) reads adaptor trimmed"
-    logging.info(amsg)
-    fivemsg = str(total_5p_no3) + " (" + str(
-        round_sig(total_5p_no3_percent, 3)) + "%) reads with correct 5' bc but 3' bc not found"
-    logging.info(fivemsg)
     assmsg = str(total_ass) + " (" + str(
         round_sig(total_ass_percent, 3)) + "%) reads correctly assigned to sample files"
     logging.info(assmsg)

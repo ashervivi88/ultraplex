@@ -5,6 +5,7 @@ environment.yml
 gif_logo.gif
 logo2.png
 matched.fastq
+matched.fastq.gz
 setup.py
 test_demux.fq.gz
 ultraplex-full.png
@@ -131,6 +132,12 @@ ultraplex_1689787885.346675.log
 ultraplex_1689788065.5297458.log
 ultraplex_1689788105.242026.log
 ultraplex_1689788130.185493.log
+ultraplex_1689788223.303159.log
+ultraplex_1689793920.8473809.log
+ultraplex_1689795128.200616.log
+ultraplex_1689795327.131126.log
+ultraplex_1689795771.647139.log
+ultraplex_1689796012.2057989.log
 ultraplex__tmp_thread_0.fastq
 ultraplex__tmp_thread_2.fastq
 uploading_to_servers.info
