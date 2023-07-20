@@ -18,7 +18,8 @@ import logging
 from math import log10, floor
 import numpy as np
 
-def  hamming_distance(seq1, seq2, limit=0):
+@profile
+def hamming_distance(seq1, seq2, limit=0):
     """
     Returns the Hamming distance between equal-length sequences.
     :param seq1: first sequence. - str
@@ -132,14 +133,14 @@ def make_5p_bc_dict(barcodes, min_score, dont_build_reference):
             barcode_dictionary[seq] = score_barcode_for_dict(seq, barcodes, max_edit_distance)
         return barcode_dictionary
 
-
+@profile
 def remove_Ns_from_barcodes(barcodes):
     # returns a dictionary with keys of the N-removed barcode, and values of the original barcode
     barcodes_no_N = {a.replace("N", ""): a for a in barcodes}
     barcodes_no_N["no_match"] = "no_match"
     return barcodes_no_N
 
-
+@profile
 def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
     """
 	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
@@ -217,6 +218,7 @@ class ReaderProcess(Process):
         self.buffer_size = buffer_size
         #self.file2 = i2
 
+    @profile
     def run(self):
         # if self.stdin_fd != -1:
         # 	sys.stdin.close()
@@ -237,6 +239,7 @@ class ReaderProcess(Process):
                 connection.send(-2)
                 connection.send((e, traceback.format_exc()))
 
+    @profile
     def send_to_worker(self, chunk_index, chunk, chunk2=None):
         worker_index = self.queue.get()  # get a worker that needs work
         connection = self.connections[worker_index]  # find the connection to this worker
@@ -302,6 +305,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
 	To notify the reader process that it wants data, processes then writes out.
 	"""
 
+    @profile
     def __init__(self, index,
                  read_pipe, need_work_queue,
                  output_directory,
@@ -335,6 +339,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
         self._trim_sequences = trim_sequences
         self._coordinates = coordinates
 
+    @profile
     def run(self):
         
         
@@ -416,16 +421,34 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                     #     output = '\n'.join(this_out) + '\n'
                     #     file.write(output.encode())
 
+            # ## Write out! ##
+            # for read in this_buffer_list:
+            #     write_temp_files(output_dir=self._output_directory,
+            #                     save_name=self._save_name,
+            #                     # demulti_type=demulti_type,
+            #                     worker_id=self._id,
+            #                     read=read)
+            #                     # ultra_mode=self._ultra_mode,
+            #                     # ignore_no_match=self._ignore_no_match)
             ## Write out! ##
-            for read in this_buffer_list:
-                write_temp_files(output_dir=self._output_directory,
-                                save_name=self._save_name,
-                                # demulti_type=demulti_type,
-                                worker_id=self._id,
-                                read=read)
-                                # ultra_mode=self._ultra_mode,
-                                # ignore_no_match=self._ignore_no_match)
+            # for read in this_buffer_list:
+            #     write_temp_files(output_dir=self._output_directory,
+            #                     save_name=self._save_name,
+            #                     #demulti_type=demulti_type,
+            #                     worker_id=self._id,
+            #                     read=read)
+            #                     #ultra_mode=self._ultra_mode,
+            #                     #ignore_no_match=self._ignore_no_match)
+            
 
+            write_temp_files(output_dir=self._output_directory,
+                            save_name=self._save_name,
+                            #demulti_type=demulti_type,
+                            worker_id=self._id,
+                            reads=this_buffer_list)
+                            #ultra_mode=self._ultra_mode,
+                            #ignore_no_match=self._ignore_no_match)
+            
             # LOG reads processed
             prev_total = self._total_demultiplexed.get()
             new_total = prev_total[0] + reads_written
@@ -442,8 +465,8 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
             prev_total = self._total_reads_assigned.get()
             new_total = prev_total + assigned_reads
             self._total_reads_assigned.put(new_total)
-
-def write_temp_files(output_dir, save_name, worker_id, read):
+@profile
+def write_temp_files(output_dir, save_name, worker_id, reads):
     # write_this = True  # assume true
     # if "no_match" in demulti_type and ignore_no_match:
     #     write_this = False
@@ -488,7 +511,7 @@ def write_temp_files(output_dir, save_name, worker_id, read):
     if os.path.exists(filename):
         append_write = 'a'  # append if already exists
     else:
-        append_write = 'w'  # make a new file if not
+        append_write = 'wb'  # make a new file if not
 
     with gzip.open(filename, append_write) as file:
         this_out = []
@@ -501,14 +524,15 @@ def write_temp_files(output_dir, save_name, worker_id, read):
         #         umi_l = len(read.name.split("rbc:")[1])
         #     assert len(read.name.split("rbc:")[1]) == umi_l, "UMIs are different lengths"
         #     ## combine into a single list
-        this_out.append("@" + read.name)
-        this_out.append(read.sequence)
-        this_out.append("+")
-        this_out.append(read.qualities)
+        for read in reads:
+            this_out.append("@" + read.name)
+            this_out.append(read.sequence)
+            this_out.append("+")
+            this_out.append(read.qualities)
 
         output = '\n'.join(this_out) + '\n'
         file.write(output.encode())
-
+@profile
 def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
                     ultra_mode, ignore_no_match):
     write_this = True  # assume true
@@ -574,7 +598,7 @@ def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
             # print(output)
             file.write(output.encode())
 
-
+@profile
 def five_p_demulti(read, five_p_bc_pos,
                    five_p_bc_dict, barcodes_no_N=[], min_score=0):
     """
@@ -598,6 +622,7 @@ def five_p_demulti(read, five_p_bc_pos,
             
     return read, winner
 
+@profile
 def find_bc_and_umi_pos(barcodes):
     """
 	This function finds the coordinates of the umi and barcodes nucleotides
@@ -615,7 +640,7 @@ def find_bc_and_umi_pos(barcodes):
 
     return bc_pos, umi_poses
 
-
+@profile
 def start_workers(n_workers, input_file, need_work_queue, #adapter,
                   barcodes, coordinates, save_name, total_demultiplexed, total_reads_assigned,
                   min_score_5_p, #three_p_mismatches, linked_bcds, three_p_trim_q,
@@ -659,6 +684,7 @@ def start_workers(n_workers, input_file, need_work_queue, #adapter,
 
     return workers, all_conn_r, all_conn_w
 
+@profile
 def concatenate_files(save_name, ultra_mode,
                       sbatch_compression,
                       output_directory,
@@ -735,11 +761,13 @@ def concatenate_files(save_name, ultra_mode,
             for name in filenames:
                 os.remove(name)
 
+@profile
 def clean_files(output_directory, save_name):
     files = glob.glob(output_directory + 'ultraplex_' + save_name + '*')
     for file in files:
         os.remove(file)
 
+@profile
 def process_bcs(tsv, mismatch_5p):
     barcodes = []
     coordinates = {}
@@ -758,6 +786,7 @@ def process_bcs(tsv, mismatch_5p):
 
     return barcodes, coordinates, match_5p
 
+@profile
 def check_enough_space(output_directory, input_file,
                        ignore_space_warning, ultra_mode):
     # First, find the free space on the output directory
@@ -779,7 +808,7 @@ def check_enough_space(output_directory, input_file,
     else:
         assert input_file_size < free * multiplier, "Not enough free space. To ignore this warning use option --ignore_space_warning"
 
-
+@profile
 def check_N_position(bcds, type):
     # checks that UMI positions result in consistent barcode
     if not len(bcds) == 0:
@@ -800,7 +829,7 @@ def check_N_position(bcds, type):
             else:
                 assert ref_pos == correct_pos, "UMI positions not consistent"
 
-
+@profile
 def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     start = time.time()
 

@@ -1,0 +1,35 @@
+name: ultra-3.6.13
+channels:
+  - defaults
+dependencies:
+  - blas=1.0=mkl
+  - ca-certificates=2023.05.30=hecd8cb5_0
+  - certifi=2021.5.30=py36hecd8cb5_0
+  - intel-openmp=2023.1.0=ha357a0b_43547
+  - libcxx=14.0.6=h9765a3e_0
+  - libffi=3.3=hb1e8313_2
+  - mkl=2019.4=233
+  - mkl-service=2.3.0=py36h9ed2024_0
+  - mkl_fft=1.3.0=py36ha059aab_0
+  - mkl_random=1.1.1=py36h959d312_0
+  - ncurses=6.4=hcec6c5f_0
+  - numpy=1.19.2=py36h456fd55_0
+  - numpy-base=1.19.2=py36hcfb5961_0
+  - openssl=1.1.1u=hca72f7f_0
+  - pip=21.2.2=py36hecd8cb5_0
+  - python=3.6.13=h88f2d9e_0
+  - readline=8.2=hca72f7f_0
+  - setuptools=58.0.4=py36hecd8cb5_0
+  - setuptools_scm=3.1.0=py36h28b3542_0
+  - six=1.16.0=pyhd3eb1b0_1
+  - sqlite=3.41.2=h6c40b1e_0
+  - tk=8.6.12=h5d9f67b_0
+  - wheel=0.37.1=pyhd3eb1b0_0
+  - xz=5.4.2=h6c40b1e_0
+  - zlib=1.2.13=h4dc903c_0
+  - pip:
+      - dnaio==0.5.0
+      - isal==0.11.1
+      - ultraplex==1.2.5
+      - xopen==1.0.1
+prefix: /Users/akim/anaconda3/envs/ultra-3.6.13

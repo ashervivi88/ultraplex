@@ -1,3 +1,5 @@
+.DS_Store
+1000.fastq.gz
 LICENSE
 README.md
 Ultraplex User Guide.pdf
@@ -5,6 +7,8 @@ environment.yml
 gif_logo.gif
 logo2.png
 matched.fastq
+matched.fastq copy
+matched.fastq copy.gz
 matched.fastq.gz
 setup.py
 test_demux.fq.gz
@@ -138,6 +142,14 @@ ultraplex_1689795128.200616.log
 ultraplex_1689795327.131126.log
 ultraplex_1689795771.647139.log
 ultraplex_1689796012.2057989.log
+ultraplex_1689796985.546346.log
+ultraplex_1689797093.023396.log
+ultraplex_1689797596.859603.log
+ultraplex_1689797607.311201.log
+ultraplex_1689797772.695169.log
+ultraplex_1689797883.7456052.log
+ultraplex_1689797951.707181.log
+ultraplex_1689798184.510026.log
 ultraplex__tmp_thread_0.fastq
 ultraplex__tmp_thread_2.fastq
 uploading_to_servers.info
@@ -161,6 +173,7 @@ tests/test_simple/example_read_2.fastq.gz
 tests/test_simple/generate_simple_PE_fastq.py
 tests/test_simple/reads1.fastq.gz
 tests/test_simple/reads2.fastq.gz
+ultraplex/.DS_Store
 ultraplex/__init__.py
 ultraplex/__main__ copy.py
 ultraplex/__main__.py
@@ -171,6 +184,7 @@ ultraplex/adapters.py
 ultraplex/align.py
 ultraplex/filters.py
 ultraplex/log.py
+ultraplex/matched-1000.fastq.gz
 ultraplex/modifiers.py
 ultraplex/parser.py
 ultraplex/pipeline.py
@@ -178,6 +192,28 @@ ultraplex/qualtrim.c
 ultraplex/qualtrim_new.c
 ultraplex/qualtrim_new.pyx
 ultraplex/report.py
+ultraplex/ultraplex_1689800945.84672.log
+ultraplex/ultraplex_1689800970.480154.log
+ultraplex/ultraplex_1689801084.5824409.log
+ultraplex/ultraplex_1689801102.538456.log
+ultraplex/ultraplex_1689801212.215352.log
+ultraplex/ultraplex_1689801632.974848.log
+ultraplex/ultraplex_1689801763.289706.log
+ultraplex/ultraplex_1689801925.552191.log
+ultraplex/ultraplex_1689804622.35479.log
+ultraplex/ultraplex_1689805060.453294.log
+ultraplex/ultraplex_1689805492.355904.log
+ultraplex/ultraplex_1689805537.073649.log
+ultraplex/ultraplex_1689806115.418506.log
+ultraplex/ultraplex_1689806216.118502.log
+ultraplex/ultraplex_demuxtmp_thread_0.fastq.gz.fastq.gz
+ultraplex/ultraplex_demuxtmp_thread_1.fastq.gz.fastq.gz
+ultraplex/ultraplex_emmanuelsuxtmp_thread_0.fastq.fastq.gz
+ultraplex/ultraplex_emmanuelsuxtmp_thread_1.fastq.fastq.gz
+ultraplex/ultraplex_idktmp_thread_0.fastq.gz.fastq.gz
+ultraplex/ultraplex_idktmp_thread_1.fastq.gz.fastq.gz
+ultraplex/ultraplex_plzworktmp_thread_0.fastq.gz.fastq.gz
+ultraplex/ultraplex_plzworktmp_thread_1.fastq.gz.fastq.gz
 ultraplex/utils.py
 ultraplex.egg-info/PKG-INFO
 ultraplex.egg-info/SOURCES.txt
