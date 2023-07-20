@@ -18,7 +18,7 @@ import logging
 from math import log10, floor
 import numpy as np
 
-@profile
+# @profile
 def hamming_distance(seq1, seq2, limit=0):
     """
     Returns the Hamming distance between equal-length sequences.
@@ -133,26 +133,70 @@ def make_5p_bc_dict(barcodes, min_score, dont_build_reference):
             barcode_dictionary[seq] = score_barcode_for_dict(seq, barcodes, max_edit_distance)
         return barcode_dictionary
 
-@profile
+# @profile
 def remove_Ns_from_barcodes(barcodes):
     # returns a dictionary with keys of the N-removed barcode, and values of the original barcode
-    barcodes_no_N = {a.replace("N", ""): a for a in barcodes}
-    barcodes_no_N["no_match"] = "no_match"
-    return barcodes_no_N
+    # barcodes_no_N = {a.replace("N", ""): a for a in barcodes}
+    # barcodes_no_N["no_match"] = "no_match"
+    return barcodes
 
-@profile
-def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
+# # @profile
+# def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
+#     """
+# 	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
+# 	"""
+
+#     max_edit_distance=8
+#     if not Ns_removed:
+#         barcodes = remove_Ns_from_barcodes(barcodes)
+#     barcodes_no_N = barcodes.keys()
+
+#     if seq in barcodes_no_N:  # no need to check all barcodes
+#         winner = barcodes[seq]  # barcode WITH Ns included
+#     # elif min_score == len(barcodes_no_N):  # i.e. no matches allowed, and seq not in barcodes
+#     #     winner = "no_match"
+#         # print(seq)
+#         # print(winner)
+#         # print("")
+#     else:  # mismatches allowed so need to check
+#         dists = {}
+
+#         for this_bc in barcodes_no_N:
+#             # # score the barcode against the read, penalty for N in the read
+#             # score = sum(a == b for a, b in zip(this_bc, seq))
+#             # scores[this_bc] = score
+#             if this_bc != "no_match":
+#                 #dist = subglobal_distance(this_bc, seq)
+#                 dist = hamming_distance(this_bc, seq)
+#                 dists[this_bc] = dist
+
+#         # Find the best score
+#         min_dist = min(dists.values())
+
+#         if min_dist > max_edit_distance:
+#             winner = "no_match"
+#         else:
+#             # check that there is only one barcode with the max score
+#             filtered = [a for a, b in dists.items() if b == min_dist]
+#             # if len(filtered) > 1:
+#             #     winner = "no_match-ambiguous" #need to decide how to fix the multiple matches situation
+#             # else:  # if there is only one
+#             #     winner = barcodes[filtered[0]]  # barcode WITH Ns included
+#             winner = barcodes[filtered[0]]  # barcode WITH Ns included
+#     #     print(min_dist)
+#     # print(seq)
+#     # print(winner)
+#     # print("")
+#     return winner
+
+# @profile
+def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed):
     """
 	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
 	"""
 
-    max_edit_distance=8
-    if not Ns_removed:
-        barcodes = remove_Ns_from_barcodes(barcodes)
-    barcodes_no_N = barcodes.keys()
-
-    if seq in barcodes_no_N:  # no need to check all barcodes
-        winner = barcodes[seq]  # barcode WITH Ns included
+    if seq in barcodes:  # no need to check all barcodes
+        winner = seq  # barcode WITH Ns included
     # elif min_score == len(barcodes_no_N):  # i.e. no matches allowed, and seq not in barcodes
     #     winner = "no_match"
         # print(seq)
@@ -161,7 +205,7 @@ def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
     else:  # mismatches allowed so need to check
         dists = {}
 
-        for this_bc in barcodes_no_N:
+        for this_bc in barcodes:
             # # score the barcode against the read, penalty for N in the read
             # score = sum(a == b for a, b in zip(this_bc, seq))
             # scores[this_bc] = score
@@ -182,13 +226,13 @@ def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
             #     winner = "no_match-ambiguous" #need to decide how to fix the multiple matches situation
             # else:  # if there is only one
             #     winner = barcodes[filtered[0]]  # barcode WITH Ns included
-            winner = barcodes[filtered[0]]  # barcode WITH Ns included
+            #print(dists)
+            winner = filtered[0]  # barcode WITH Ns included
     #     print(min_dist)
     # print(seq)
     # print(winner)
     # print("")
     return winner
-
 
 class ReaderProcess(Process):
     """
@@ -218,7 +262,7 @@ class ReaderProcess(Process):
         self.buffer_size = buffer_size
         #self.file2 = i2
 
-    @profile
+    # @profile
     def run(self):
         # if self.stdin_fd != -1:
         # 	sys.stdin.close()
@@ -239,7 +283,7 @@ class ReaderProcess(Process):
                 connection.send(-2)
                 connection.send((e, traceback.format_exc()))
 
-    @profile
+    # @profile
     def send_to_worker(self, chunk_index, chunk, chunk2=None):
         worker_index = self.queue.get()  # get a worker that needs work
         connection = self.connections[worker_index]  # find the connection to this worker
@@ -305,7 +349,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
 	To notify the reader process that it wants data, processes then writes out.
 	"""
 
-    @profile
+    # @profile
     def __init__(self, index,
                  read_pipe, need_work_queue,
                  output_directory,
@@ -327,7 +371,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
         self._total_reads_assigned = total_reads_assigned  # a queue which keeps track of the total number of reads assigned to sample files
 
         self._save_name = save_name  # the name to save the output fastqs
-        self._five_p_barcodes_pos, self._five_p_umi_poses = find_bc_and_umi_pos(barcodes)
+        #self._five_p_barcodes_pos, self._five_p_umi_poses = find_bc_and_umi_pos(barcodes)
         self._five_p_bc_dict = make_5p_bc_dict(barcodes, min_score_5_p, dont_build_reference)
         self._min_score_5_p = min_score_5_p  
         self._ultra_mode = False
@@ -339,7 +383,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
         self._trim_sequences = trim_sequences
         self._coordinates = coordinates
 
-    @profile
+    # @profile
     def run(self):
         
         
@@ -386,9 +430,9 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                                                                                 "")  # remove bad characters
 
                 read, five_p_bc = five_p_demulti(read,
-                                                                    self._five_p_barcodes_pos,
+                                                                    #self._five_p_barcodes_pos,
                                                                     #self._five_p_umi_poses,
-                                                                    self._five_p_bc_dict,
+                                                                    #self._five_p_bc_dict,
                                                                     #add_umi=True,
                                                                     barcodes_no_N=self._barcodes_no_N,
                                                                     min_score=self._min_score_5_p)
@@ -465,7 +509,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
             prev_total = self._total_reads_assigned.get()
             new_total = prev_total + assigned_reads
             self._total_reads_assigned.put(new_total)
-@profile
+# @profile
 def write_temp_files(output_dir, save_name, worker_id, reads):
     # write_this = True  # assume true
     # if "no_match" in demulti_type and ignore_no_match:
@@ -532,7 +576,7 @@ def write_temp_files(output_dir, save_name, worker_id, reads):
 
         output = '\n'.join(this_out) + '\n'
         file.write(output.encode())
-@profile
+# @profile
 def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
                     ultra_mode, ignore_no_match):
     write_this = True  # assume true
@@ -598,31 +642,32 @@ def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
             # print(output)
             file.write(output.encode())
 
-@profile
-def five_p_demulti(read, five_p_bc_pos,
-                   five_p_bc_dict, barcodes_no_N=[], min_score=0):
+# @profile
+def five_p_demulti(read, barcodes_no_N=[], min_score=0):
     """
     this function demultiplexes on the 5' end
     """
     sequence_length = len(read.sequence)
+    winner = score_barcode_for_dict(read.sequence, barcodes_no_N, min_score, Ns_removed=True)
+    if sequence_length < len(winner):  # read is too short to contain barcode
+        winner = "no_match"
+    # if sequence_length > max(five_p_bc_pos):
+    #     # find best barcode match
+    #     # this_bc_seq = ''.join([read.sequence[i] for i in five_p_bc_pos])
+    #     this_bc_seq = read.sequence
+    #     if "dont_build" in five_p_bc_dict:
+    #         # print(this_bc_seq)
+    #         winner = score_barcode_for_dict(this_bc_seq, barcodes_no_N, min_score, Ns_removed=True)
+    #     else:
+    #         winner = five_p_bc_dict[this_bc_seq]
 
-    if sequence_length > max(five_p_bc_pos):
-        # find best barcode match
-        # this_bc_seq = ''.join([read.sequence[i] for i in five_p_bc_pos])
-        this_bc_seq = read.sequence
-        if "dont_build" in five_p_bc_dict:
-            # print(this_bc_seq)
-            winner = score_barcode_for_dict(this_bc_seq, barcodes_no_N, min_score, Ns_removed=True)
-        else:
-            winner = five_p_bc_dict[this_bc_seq]
-
-        # store what sequence will be removed
-        if sequence_length < len(winner):  # read is too short to contain barcode
-            winner = "no_match"
+    #     # store what sequence will be removed
+    #     if sequence_length < len(winner):  # read is too short to contain barcode
+    #         winner = "no_match"
             
     return read, winner
 
-@profile
+# @profile
 def find_bc_and_umi_pos(barcodes):
     """
 	This function finds the coordinates of the umi and barcodes nucleotides
@@ -640,7 +685,7 @@ def find_bc_and_umi_pos(barcodes):
 
     return bc_pos, umi_poses
 
-@profile
+# @profile
 def start_workers(n_workers, input_file, need_work_queue, #adapter,
                   barcodes, coordinates, save_name, total_demultiplexed, total_reads_assigned,
                   min_score_5_p, #three_p_mismatches, linked_bcds, three_p_trim_q,
@@ -684,7 +729,7 @@ def start_workers(n_workers, input_file, need_work_queue, #adapter,
 
     return workers, all_conn_r, all_conn_w
 
-@profile
+# @profile
 def concatenate_files(save_name, ultra_mode,
                       sbatch_compression,
                       output_directory,
@@ -761,13 +806,13 @@ def concatenate_files(save_name, ultra_mode,
             for name in filenames:
                 os.remove(name)
 
-@profile
+# @profile
 def clean_files(output_directory, save_name):
     files = glob.glob(output_directory + 'ultraplex_' + save_name + '*')
     for file in files:
         os.remove(file)
 
-@profile
+# @profile
 def process_bcs(tsv, mismatch_5p):
     barcodes = []
     coordinates = {}
@@ -779,14 +824,14 @@ def process_bcs(tsv, mismatch_5p):
             counter += 1
             # First, find if theres a comma
             line = row.split('\t')
-            barcodes.append(line[0])
             coordinates[line[0]]=(line[1],line[2].strip()) #in case \n
             
+    barcodes =  list(coordinates.keys())
     match_5p = len(barcodes[0]) - mismatch_5p
 
     return barcodes, coordinates, match_5p
 
-@profile
+# @profile
 def check_enough_space(output_directory, input_file,
                        ignore_space_warning, ultra_mode):
     # First, find the free space on the output directory
@@ -808,7 +853,7 @@ def check_enough_space(output_directory, input_file,
     else:
         assert input_file_size < free * multiplier, "Not enough free space. To ignore this warning use option --ignore_space_warning"
 
-@profile
+# @profile
 def check_N_position(bcds, type):
     # checks that UMI positions result in consistent barcode
     if not len(bcds) == 0:
@@ -829,7 +874,7 @@ def check_N_position(bcds, type):
             else:
                 assert ref_pos == correct_pos, "UMI positions not consistent"
 
-@profile
+# @profile
 def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     start = time.time()
 
@@ -944,7 +989,7 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     #five_p_bcs, three_p_bcs, linked_bcds, min_score_5_p, sample_names = process_bcs(barcodes_tsv, mismatch_5p)
     barcodes, coordinates, min_score_5_p = process_bcs(barcodes_tsv, mismatch_5p)
     
-    check_N_position(barcodes, "5")  # check 3' later so that different 5' barcodes can have different types of 3' bcd
+    #check_N_position(barcodes, "5")  # check 3' later so that different 5' barcodes can have different types of 3' bcd
 
     # remove files from previous runs
     clean_files(output_directory, save_name)

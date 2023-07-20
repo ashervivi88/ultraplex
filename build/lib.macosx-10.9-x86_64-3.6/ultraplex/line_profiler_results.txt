@@ -1,0 +1,905 @@
+Timer unit: 1e-06 s
+
+Total time: 0 s
+File: __main__.py
+Function: hamming_distance at line 21
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+    21                                           @profile
+    22                                           def hamming_distance(seq1, seq2, limit=0):
+    23                                               """
+    24                                               Returns the Hamming distance between equal-length sequences.
+    25                                               :param seq1: first sequence. - str
+    26                                               :param seq2: second sequence. - str
+    27                                               :param limit: max distance limit before aborting (returning limit + 1).
+    28                                               :return: the edit distance.
+    29                                               """
+    30                                               i = 0
+    31                                               sum = 0
+    32                                               for i in range(len(seq1)):
+    33                                                   if seq1[i] != seq2[i]:
+    34                                                       sum += 1
+    35                                                   if limit > 0 and sum > limit:
+    36                                                       return limit + 1
+    37                                               return sum
+
+Total time: 0.007037 s
+File: __main__.py
+Function: remove_Ns_from_barcodes at line 136
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   136                                           @profile
+   137                                           def remove_Ns_from_barcodes(barcodes):
+   138                                               # returns a dictionary with keys of the N-removed barcode, and values of the original barcode
+   139         2       7033.0   3516.5     99.9      barcodes_no_N = {a.replace("N", ""): a for a in barcodes}
+   140         2          2.0      1.0      0.0      barcodes_no_N["no_match"] = "no_match"
+   141         2          2.0      1.0      0.0      return barcodes_no_N
+
+Total time: 0 s
+File: __main__.py
+Function: score_barcode_for_dict at line 143
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   143                                           @profile
+   144                                           def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed=False):
+   145                                               """
+   146                                           	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
+   147                                           	"""
+   148                                           
+   149                                               max_edit_distance=8
+   150                                               if not Ns_removed:
+   151                                                   barcodes = remove_Ns_from_barcodes(barcodes)
+   152                                               barcodes_no_N = barcodes.keys()
+   153                                           
+   154                                               if seq in barcodes_no_N:  # no need to check all barcodes
+   155                                                   winner = barcodes[seq]  # barcode WITH Ns included
+   156                                               # elif min_score == len(barcodes_no_N):  # i.e. no matches allowed, and seq not in barcodes
+   157                                               #     winner = "no_match"
+   158                                                   # print(seq)
+   159                                                   # print(winner)
+   160                                                   # print("")
+   161                                               else:  # mismatches allowed so need to check
+   162                                                   dists = {}
+   163                                           
+   164                                                   for this_bc in barcodes_no_N:
+   165                                                       # # score the barcode against the read, penalty for N in the read
+   166                                                       # score = sum(a == b for a, b in zip(this_bc, seq))
+   167                                                       # scores[this_bc] = score
+   168                                                       if this_bc != "no_match":
+   169                                                           #dist = subglobal_distance(this_bc, seq)
+   170                                                           dist = hamming_distance(this_bc, seq)
+   171                                                           dists[this_bc] = dist
+   172                                           
+   173                                                   # Find the best score
+   174                                                   min_dist = min(dists.values())
+   175                                           
+   176                                                   if min_dist > max_edit_distance:
+   177                                                       winner = "no_match"
+   178                                                   else:
+   179                                                       # check that there is only one barcode with the max score
+   180                                                       filtered = [a for a, b in dists.items() if b == min_dist]
+   181                                                       # if len(filtered) > 1:
+   182                                                       #     winner = "no_match-ambiguous" #need to decide how to fix the multiple matches situation
+   183                                                       # else:  # if there is only one
+   184                                                       #     winner = barcodes[filtered[0]]  # barcode WITH Ns included
+   185                                                       winner = barcodes[filtered[0]]  # barcode WITH Ns included
+   186                                               #     print(min_dist)
+   187                                               # print(seq)
+   188                                               # print(winner)
+   189                                               # print("")
+   190                                               return winner
+
+Total time: 947.613 s
+File: __main__.py
+Function: run at line 221
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   221                                               @profile
+   222                                               def run(self):
+   223                                                   # if self.stdin_fd != -1:
+   224                                                   # 	sys.stdin.close()
+   225                                                   # 	sys.stdin = os.fdopen(self.stdin_fd) #/# not sure why I need this!
+   226                                           
+   227         1          1.0      1.0      0.0          try:
+   228         1      39387.0  39387.0      0.0              with xopen(self.file, 'rb') as f:
+   229         2       9230.0   4615.0      0.0                  for chunk_index, chunk in enumerate(dnaio.read_chunks(f, self.buffer_size)):
+   230         2       3009.0   1504.5      0.0                      self.send_to_worker(chunk_index, chunk)
+   231                                           
+   232                                                       # Send poison pills to all workers
+   233         2         18.0      9.0      0.0              for _ in range(len(self.connections)):
+   234         2  947561515.0 473780757.5    100.0                  worker_index = self.queue.get()
+   235         2        210.0    105.0      0.0                  self.connections[worker_index].send(-1)
+   236                                                   except Exception as e:
+   237                                                       # TODO better send this to a common "something went wrong" Queue
+   238                                                       for connection in self.connections:
+   239                                                           connection.send(-2)
+   240                                                           connection.send((e, traceback.format_exc()))
+
+Total time: 0.00281 s
+File: __main__.py
+Function: send_to_worker at line 242
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   242                                               @profile
+   243                                               def send_to_worker(self, chunk_index, chunk, chunk2=None):
+   244         2       1902.0    951.0     67.7          worker_index = self.queue.get()  # get a worker that needs work
+   245         2          8.0      4.0      0.3          connection = self.connections[worker_index]  # find the connection to this worker
+   246         2        333.0    166.5     11.9          connection.send(chunk_index)  # send the index of this chunk to the worker
+   247         2        565.0    282.5     20.1          connection.send_bytes(chunk)  # /# send the actual data to this worker
+   248         2          2.0      1.0      0.1          if chunk2 is not None:
+   249                                                       connection.send_bytes(chunk2)
+
+Total time: 0.280564 s
+File: __main__.py
+Function: __init__ at line 308
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   308                                               @profile
+   309                                               def __init__(self, index,
+   310                                                            read_pipe, need_work_queue,
+   311                                                            output_directory,
+   312                                                            barcodes, coordinates,
+   313                                                            save_name,
+   314                                                            total_demultiplexed,
+   315                                                            total_reads_assigned,
+   316                                                            ultra_mode,
+   317                                                            min_score_5_p, 
+   318                                                            ignore_no_match,
+   319                                                            dont_build_reference,
+   320                                                            trim_sequences):
+   321         2        228.0    114.0      0.1          super().__init__()
+   322         2          2.0      1.0      0.0          self._id = index  # the worker id
+   323         2          1.0      0.5      0.0          self._read_pipe = read_pipe  # the pipe the reader reads data from
+   324         2          5.0      2.5      0.0          self._need_work_queue = need_work_queue  # worker adds its id to this queue when it needs work
+   325                                           
+   326         2          2.0      1.0      0.0          self._total_demultiplexed = total_demultiplexed  # a queue which keeps track of the total number of reads processed
+   327         2          2.0      1.0      0.0          self._total_reads_assigned = total_reads_assigned  # a queue which keeps track of the total number of reads assigned to sample files
+   328                                           
+   329         2          2.0      1.0      0.0          self._save_name = save_name  # the name to save the output fastqs
+   330         2     273203.0 136601.5     97.4          self._five_p_barcodes_pos, self._five_p_umi_poses = find_bc_and_umi_pos(barcodes)
+   331         2         20.0     10.0      0.0          self._five_p_bc_dict = make_5p_bc_dict(barcodes, min_score_5_p, dont_build_reference)
+   332         2          2.0      1.0      0.0          self._min_score_5_p = min_score_5_p  
+   333         2          3.0      1.5      0.0          self._ultra_mode = False
+   334         2          1.0      0.5      0.0          self._output_directory = output_directory
+   335                                           
+   336         2          2.0      1.0      0.0          self._ignore_no_match = ignore_no_match
+   337         2       7077.0   3538.5      2.5          self._barcodes_no_N = remove_Ns_from_barcodes(barcodes)
+   338                                           
+   339         2         12.0      6.0      0.0          self._trim_sequences = trim_sequences
+   340         2          2.0      1.0      0.0          self._coordinates = coordinates
+
+Total time: 0 s
+File: __main__.py
+Function: run at line 342
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   342                                               @profile
+   343                                               def run(self):
+   344                                                   
+   345                                                   
+   346                                                   while True:  # /# once spawned, this keeps running forever, until poison pill recieved
+   347                                                       # Notify reader that we need data
+   348                                                       self._need_work_queue.put(self._id)
+   349                                           
+   350                                                       # /# get some data
+   351                                                       chunk_index = self._read_pipe.recv()
+   352                                           
+   353                                                       # /# check there's no error
+   354                                                       if chunk_index == -1:  # /# poison pill from Sina
+   355                                                           # reader is done
+   356                                                           break
+   357                                                       elif chunk_index == -2:
+   358                                                           # An exception has occurred in the reader
+   359                                                           e, tb_str = self._read_pipe.recv()
+   360                                                           raise e
+   361                                           
+   362                                                       # /# otherwise if we have no error, run...
+   363                                                       # /# get some bytes
+   364                                                       data = self._read_pipe.recv_bytes()
+   365                                                       infiles = io.BytesIO(data)
+   366                                           
+   367                                                       # /# process the reads
+   368                                                       #processed_reads = []
+   369                                                       this_buffer_list = []
+   370                                                       reads_written = 0
+   371                                                       assigned_reads = 0
+   372                                           
+   373                                           
+   374                                                       for read in InputFiles(infiles).open():
+   375                                                           reads_written += 1
+   376                                                           #umi = ""
+   377                                                           
+   378                                                           # trim_sequences = [(30, 34), (80, 88), (90, 100)]
+   379                                                           trim_sequences = self._trim_sequences
+   380                                                           if trim_sequences:
+   381                                                               read = user_trim(read, trim_sequences)
+   382                                                           
+   383                                                           
+   384                                                           # /# demultiplex at the 5' end ###
+   385                                                           read.name = read.name.replace(" ", "").replace("/", "").replace("\\",
+   386                                                                                                                           "")  # remove bad characters
+   387                                           
+   388                                                           read, five_p_bc = five_p_demulti(read,
+   389                                                                                                               self._five_p_barcodes_pos,
+   390                                                                                                               #self._five_p_umi_poses,
+   391                                                                                                               self._five_p_bc_dict,
+   392                                                                                                               #add_umi=True,
+   393                                                                                                               barcodes_no_N=self._barcodes_no_N,
+   394                                                                                                               min_score=self._min_score_5_p)
+   395                                                                                                               #keep_barcode=self._keep_barcode)
+   396                                                                                                               
+   397                                                           
+   398                                                           
+   399                                                           
+   400                                           
+   401                                                           if five_p_bc != "no_match":
+   402                                                               x_coord = self._coordinates[five_p_bc][0]
+   403                                                               y_coord = self._coordinates[five_p_bc][1]
+   404                                                               read.name = read.name + " B0:Z:" + five_p_bc + " B1:Z:" + x_coord + " B2:Z:" + y_coord
+   405                                                               this_buffer_list.append(read)
+   406                                                               #print(read.name)
+   407                                                               
+   408                                                               # filename = 'matched-4000.fastq.gz'
+   409                                           
+   410                                                               # if os.path.exists(filename):
+   411                                                               #     append_write = 'ab'  # append if already exists
+   412                                                               # else:
+   413                                                               #     append_write = 'wb'  # make a new file if not
+   414                                           
+   415                                                               # with gzip.open(filename, append_write) as file:
+   416                                                               #     this_out = []
+   417                                                               #     this_out.append("@" + read.name)
+   418                                                               #     this_out.append(read.sequence)
+   419                                                               #     this_out.append("+")
+   420                                                               #     this_out.append(read.qualities)
+   421                                                               #     output = '\n'.join(this_out) + '\n'
+   422                                                               #     file.write(output.encode())
+   423                                           
+   424                                                       # ## Write out! ##
+   425                                                       # for read in this_buffer_list:
+   426                                                       #     write_temp_files(output_dir=self._output_directory,
+   427                                                       #                     save_name=self._save_name,
+   428                                                       #                     # demulti_type=demulti_type,
+   429                                                       #                     worker_id=self._id,
+   430                                                       #                     read=read)
+   431                                                       #                     # ultra_mode=self._ultra_mode,
+   432                                                       #                     # ignore_no_match=self._ignore_no_match)
+   433                                                       ## Write out! ##
+   434                                                       # for read in this_buffer_list:
+   435                                                       #     write_temp_files(output_dir=self._output_directory,
+   436                                                       #                     save_name=self._save_name,
+   437                                                       #                     #demulti_type=demulti_type,
+   438                                                       #                     worker_id=self._id,
+   439                                                       #                     read=read)
+   440                                                       #                     #ultra_mode=self._ultra_mode,
+   441                                                       #                     #ignore_no_match=self._ignore_no_match)
+   442                                                       
+   443                                           
+   444                                                       write_temp_files(output_dir=self._output_directory,
+   445                                                                       save_name=self._save_name,
+   446                                                                       #demulti_type=demulti_type,
+   447                                                                       worker_id=self._id,
+   448                                                                       reads=this_buffer_list)
+   449                                                                       #ultra_mode=self._ultra_mode,
+   450                                                                       #ignore_no_match=self._ignore_no_match)
+   451                                                       
+   452                                                       # LOG reads processed
+   453                                                       prev_total = self._total_demultiplexed.get()
+   454                                                       new_total = prev_total[0] + reads_written
+   455                                                       if new_total - prev_total[1] >= 1_000_000:
+   456                                                           prog_msg = str(new_total // 1_000_000) + ' million reads processed'
+   457                                                           print(prog_msg)
+   458                                                           logging.info(prog_msg)
+   459                                                           last_printed = new_total
+   460                                                       else:
+   461                                                           last_printed = prev_total[1]
+   462                                                       self._total_demultiplexed.put([new_total, last_printed])
+   463                                           
+   464                                                       # LOG reads assigned
+   465                                                       prev_total = self._total_reads_assigned.get()
+   466                                                       new_total = prev_total + assigned_reads
+   467                                                       self._total_reads_assigned.put(new_total)
+
+Total time: 0 s
+File: __main__.py
+Function: write_temp_files at line 468
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   468                                           @profile
+   469                                           def write_temp_files(output_dir, save_name, worker_id, reads):
+   470                                               # write_this = True  # assume true
+   471                                               # if "no_match" in demulti_type and ignore_no_match:
+   472                                               #     write_this = False
+   473                                           
+   474                                               # if ultra_mode and write_this:
+   475                                               #     # /# work out this filename
+   476                                               #     filename = output_dir + 'ultraplex_' + save_name + demulti_type + '_tmp_thread_' + str(
+   477                                               #         worker_id) + '.fastq'
+   478                                           
+   479                                               #     if os.path.exists(filename):
+   480                                               #         append_write = 'a'  # append if already exists
+   481                                               #     else:
+   482                                               #         append_write = 'w'  # make a new file if not
+   483                                           
+   484                                               #     with open(filename, append_write) as file:
+   485                                               #         this_out = []
+   486                                               #         for counter, read in enumerate(reads):
+   487                                               #             # Quality control:
+   488                                               #             assert len(read.name.split("rbc:")) <= 2, "Multiple UMIs in header!"
+   489                                           
+   490                                               #             if counter == 0:
+   491                                               #                 umi_l = len(read.name.split("rbc:")[1])
+   492                                               #             assert len(read.name.split("rbc:")[1]) == umi_l, "UMIs are different lengths"
+   493                                               #             ## combine into a single list
+   494                                               #             this_out.append("@" + read.name)
+   495                                               #             this_out.append(read.sequence)
+   496                                               #             this_out.append("+")
+   497                                               #             this_out.append(read.qualities)
+   498                                           
+   499                                               #         output = '\n'.join(this_out) + '\n'
+   500                                               #         # print(output)
+   501                                               #         file.write(output)
+   502                                           
+   503                                               # elif write_this:
+   504                                                   # /# work out this filename
+   505                                                   # filename = output_dir + 'ultraplex_' + save_name + demulti_type + '_tmp_thread_' + str(
+   506                                                   #     worker_id) + '.fastq.gz'
+   507                                           
+   508                                               filename = output_dir + 'ultraplex_' + save_name + 'tmp_thread_' + str(
+   509                                                   worker_id) + '.fastq'
+   510                                           
+   511                                               if os.path.exists(filename):
+   512                                                   append_write = 'a'  # append if already exists
+   513                                               else:
+   514                                                   append_write = 'wb'  # make a new file if not
+   515                                           
+   516                                               with gzip.open(filename, append_write) as file:
+   517                                                   this_out = []
+   518                                                   # for counter, read in enumerate(reads):
+   519                                           
+   520                                                   #     # Quality control:
+   521                                                   #     assert len(read.name.split("rbc:")) <= 2, "Multiple UMIs in header!"
+   522                                           
+   523                                                   #     if counter == 0:
+   524                                                   #         umi_l = len(read.name.split("rbc:")[1])
+   525                                                   #     assert len(read.name.split("rbc:")[1]) == umi_l, "UMIs are different lengths"
+   526                                                   #     ## combine into a single list
+   527                                                   for read in reads:
+   528                                                       this_out.append("@" + read.name)
+   529                                                       this_out.append(read.sequence)
+   530                                                       this_out.append("+")
+   531                                                       this_out.append(read.qualities)
+   532                                           
+   533                                                   output = '\n'.join(this_out) + '\n'
+   534                                                   file.write(output.encode())
+
+Total time: 0 s
+File: __main__.py
+Function: write_tmp_files at line 535
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   535                                           @profile
+   536                                           def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
+   537                                                               ultra_mode, ignore_no_match):
+   538                                               write_this = True  # assume true
+   539                                               if "no_match" in demulti_type and ignore_no_match:
+   540                                                   write_this = False
+   541                                           
+   542                                               if ultra_mode and write_this:
+   543                                                   # /# work out this filename
+   544                                                   filename = output_dir + 'ultraplex_' + save_name + demulti_type + '_tmp_thread_' + str(
+   545                                                       worker_id) + '.fastq'
+   546                                           
+   547                                                   if os.path.exists(filename):
+   548                                                       append_write = 'a'  # append if already exists
+   549                                                   else:
+   550                                                       append_write = 'w'  # make a new file if not
+   551                                           
+   552                                                   with open(filename, append_write) as file:
+   553                                                       this_out = []
+   554                                                       for counter, read in enumerate(reads):
+   555                                                           # Quality control:
+   556                                                           assert len(read.name.split("rbc:")) <= 2, "Multiple UMIs in header!"
+   557                                           
+   558                                                           if counter == 0:
+   559                                                               umi_l = len(read.name.split("rbc:")[1])
+   560                                                           assert len(read.name.split("rbc:")[1]) == umi_l, "UMIs are different lengths"
+   561                                                           ## combine into a single list
+   562                                                           this_out.append("@" + read.name)
+   563                                                           this_out.append(read.sequence)
+   564                                                           this_out.append("+")
+   565                                                           this_out.append(read.qualities)
+   566                                           
+   567                                                       output = '\n'.join(this_out) + '\n'
+   568                                                       # print(output)
+   569                                                       file.write(output)
+   570                                           
+   571                                               elif write_this:
+   572                                                   # /# work out this filename
+   573                                                   filename = output_dir + 'ultraplex_' + save_name + demulti_type + '_tmp_thread_' + str(
+   574                                                       worker_id) + '.fastq.gz'
+   575                                           
+   576                                                   if os.path.exists(filename):
+   577                                                       append_write = 'ab'  # append if already exists
+   578                                                   else:
+   579                                                       append_write = 'wb'  # make a new file if not
+   580                                           
+   581                                                   with gzip.open(filename, append_write) as file:
+   582                                                       this_out = []
+   583                                                       for counter, read in enumerate(reads):
+   584                                           
+   585                                                           # Quality control:
+   586                                                           assert len(read.name.split("rbc:")) <= 2, "Multiple UMIs in header!"
+   587                                           
+   588                                                           if counter == 0:
+   589                                                               umi_l = len(read.name.split("rbc:")[1])
+   590                                                           assert len(read.name.split("rbc:")[1]) == umi_l, "UMIs are different lengths"
+   591                                                           ## combine into a single list
+   592                                                           this_out.append("@" + read.name)
+   593                                                           this_out.append(read.sequence)
+   594                                                           this_out.append("+")
+   595                                                           this_out.append(read.qualities)
+   596                                           
+   597                                                       output = '\n'.join(this_out) + '\n'
+   598                                                       # print(output)
+   599                                                       file.write(output.encode())
+
+Total time: 0 s
+File: __main__.py
+Function: five_p_demulti at line 601
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   601                                           @profile
+   602                                           def five_p_demulti(read, five_p_bc_pos,
+   603                                                              five_p_bc_dict, barcodes_no_N=[], min_score=0):
+   604                                               """
+   605                                               this function demultiplexes on the 5' end
+   606                                               """
+   607                                               sequence_length = len(read.sequence)
+   608                                           
+   609                                               if sequence_length > max(five_p_bc_pos):
+   610                                                   # find best barcode match
+   611                                                   # this_bc_seq = ''.join([read.sequence[i] for i in five_p_bc_pos])
+   612                                                   this_bc_seq = read.sequence
+   613                                                   if "dont_build" in five_p_bc_dict:
+   614                                                       # print(this_bc_seq)
+   615                                                       winner = score_barcode_for_dict(this_bc_seq, barcodes_no_N, min_score, Ns_removed=True)
+   616                                                   else:
+   617                                                       winner = five_p_bc_dict[this_bc_seq]
+   618                                           
+   619                                                   # store what sequence will be removed
+   620                                                   if sequence_length < len(winner):  # read is too short to contain barcode
+   621                                                       winner = "no_match"
+   622                                                       
+   623                                               return read, winner
+
+Total time: 0.236545 s
+File: __main__.py
+Function: find_bc_and_umi_pos at line 625
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   625                                           @profile
+   626                                           def find_bc_and_umi_pos(barcodes):
+   627                                               """
+   628                                           	This function finds the coordinates of the umi and barcodes nucleotides
+   629                                           	"""
+   630         2          8.0      4.0      0.0      bcs_poses = {}
+   631         2          2.0      1.0      0.0      umi_poses = {}
+   632     18432      10740.0      0.6      4.5      for bc in barcodes:
+   633     18432     119483.0      6.5     50.5          bcs_poses[bc] = [i for i in range(len(bc)) if bc[i] != "N"]
+   634     18432     106306.0      5.8     44.9          umi_poses[bc] = [i for i in range(len(bc)) if bc[i] == "N"]
+   635                                           
+   636                                               # /# we assume that the barcode is always the same
+   637         2          4.0      2.0      0.0      bc_pos = bcs_poses[barcodes[0]]
+   638                                           
+   639         2          2.0      1.0      0.0      umi_poses["no_match"] = []
+   640                                           
+   641         2          0.0      0.0      0.0      return bc_pos, umi_poses
+
+Total time: 0.289891 s
+File: __main__.py
+Function: start_workers at line 643
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   643                                           @profile
+   644                                           def start_workers(n_workers, input_file, need_work_queue, #adapter,
+   645                                                             barcodes, coordinates, save_name, total_demultiplexed, total_reads_assigned,
+   646                                                             min_score_5_p, #three_p_mismatches, linked_bcds, three_p_trim_q,
+   647                                                             ultra_mode, output_directory, #final_min_length, q5, i2, adapter2, min_trim,
+   648                                                             ignore_no_match, dont_build_reference, #keep_barcode, trim_sequences):
+   649                                                             trim_sequences):
+   650                                               """
+   651                                           	This function starts all the workers
+   652                                           	"""
+   653         1          0.0      0.0      0.0      workers = []
+   654         1          1.0      1.0      0.0      all_conn_r = []
+   655         1          1.0      1.0      0.0      all_conn_w = []
+   656                                           
+   657         1        315.0    315.0      0.1      total_demultiplexed.put([0, 0])  # [total written, last time it was printed] - initialise [0,0]
+   658         1       2186.0   2186.0      0.8      total_reads_assigned.put(0)
+   659                                           
+   660         2         11.0      5.5      0.0      for index in range(n_workers):
+   661                                                   # create a pipe to send data to this worker
+   662         2        453.0    226.5      0.2          conn_r, conn_w = Pipe(duplex=False)
+   663         2          8.0      4.0      0.0          all_conn_r.append(conn_r)
+   664         2          2.0      1.0      0.0          all_conn_w.append(conn_w)
+   665                                           
+   666         2          1.0      0.5      0.0          worker = WorkerProcess(index=index,
+   667         2          0.0      0.0      0.0                                 read_pipe=conn_r,  # this is the "read_pipe"
+   668         2          5.0      2.5      0.0                                 need_work_queue=need_work_queue,  # worker tells the reader it needs work
+   669         2          5.0      2.5      0.0                                 output_directory=output_directory,
+   670         2          7.0      3.5      0.0                                 barcodes=barcodes,
+   671         2          6.0      3.0      0.0                                 coordinates=coordinates,
+   672         2          6.0      3.0      0.0                                 save_name=save_name,
+   673         2          2.0      1.0      0.0                                 total_demultiplexed=total_demultiplexed,
+   674         2          2.0      1.0      0.0                                 total_reads_assigned=total_reads_assigned,
+   675         2          0.0      0.0      0.0                                 ultra_mode=ultra_mode,
+   676         2          0.0      0.0      0.0                                 min_score_5_p=min_score_5_p,
+   677         2          1.0      0.5      0.0                                 ignore_no_match=ignore_no_match,
+   678         2          2.0      1.0      0.0                                 dont_build_reference=dont_build_reference,
+   679         2     280767.0 140383.5     96.9                                 trim_sequences=trim_sequences
+   680                                                                          )
+   681                                           
+   682         2       6024.0   3012.0      2.1          worker.start()
+   683         2         79.0     39.5      0.0          workers.append(worker)
+   684                                           
+   685         1          7.0      7.0      0.0      return workers, all_conn_r, all_conn_w
+
+Total time: 0.063872 s
+File: __main__.py
+Function: concatenate_files at line 687
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   687                                           @profile
+   688                                           def concatenate_files(save_name, ultra_mode,
+   689                                                                 sbatch_compression,
+   690                                                                 output_directory,
+   691                                                                 compression_threads=8):
+   692                                               """
+   693                                           	this function concatenates all the files produced by the 
+   694                                           	different workers, then sends an sbatch command to compress
+   695                                           	them all to fastqs.
+   696                                           	"""
+   697                                               # First, file all the unique file names we have, ignoring threads
+   698         1       1326.0   1326.0      2.1      all_names = glob.glob(output_directory + "ultraplex_" + save_name + '*')
+   699                                           
+   700         1          1.0      1.0      0.0      all_types = []  # ignoring threads
+   701         2          1.0      0.5      0.0      for name in all_names:
+   702         2          5.0      2.5      0.0          this_type = name.split("_tmp_thread_")[0]
+   703                                           
+   704         2          2.0      1.0      0.0          if this_type not in all_types:
+   705         2          0.0      0.0      0.0              all_types.append(this_type)  # this_type contains directory if applicable
+   706                                           
+   707                                               # now concatenate them
+   708         1          0.0      0.0      0.0      if ultra_mode:
+   709                                                   for this_type in all_types:
+   710                                                       # find all files with this barcode (or barcode combination)
+   711                                                       filenames = sorted(glob.glob(this_type + '*'))  # this type already has output directory
+   712                                                       # then concatenate
+   713                                                       command = ''
+   714                                                       for name in filenames:
+   715                                                           command = command + name + ' '
+   716                                                       command = 'cat ' + command + ' > ' + this_type + '.fastq'
+   717                                                       os.system(command)
+   718                                           
+   719                                                       for name in filenames:
+   720                                                           os.remove(name)
+   721                                           
+   722                                                       print("Compressing with pigz...")
+   723                                                       c_thread_n = '-p' + str(compression_threads)
+   724                                                       if sbatch_compression:
+   725                                                           os.system(
+   726                                                               'sbatch -J compression -c ' + str(
+   727                                                                   compression_threads) + ' --time 4:00:00 --wrap="pigz ' + c_thread_n + ' ' + this_type + '.fastq"')
+   728                                                       else:
+   729                                                           os.system('pigz ' + c_thread_n + ' ' + this_type + '.fastq')
+   730                                           
+   731                                                   # check if compression is complete
+   732                                                   if sbatch_compression:
+   733                                                       finished = False
+   734                                                       print("Compressing....")
+   735                                                       while not finished:
+   736                                                           # assume it's complete
+   737                                                           complete = True
+   738                                                           # now actually check
+   739                                                           for this_type in all_types:
+   740                                                               filename = glob.glob(this_type + '*')
+   741                                           
+   742                                                               if '.gz' not in filename[0]:
+   743                                                                   complete = False
+   744                                           
+   745                                                           if complete:
+   746                                                               finished = True
+   747                                                               print("Compression complete!")
+   748                                                           else:
+   749                                                               time.sleep(1)
+   750                                               else:  # if not ultra_mode
+   751         2          3.0      1.5      0.0          for this_type in all_types:
+   752                                                       # find all files with this barcode (or barcode combination)
+   753         2       4451.0   2225.5      7.0              filenames = sorted(glob.glob(this_type + '*'))
+   754                                                       # then concatenate
+   755         2          2.0      1.0      0.0              command = ''
+   756         2          2.0      1.0      0.0              for name in filenames:
+   757         2          2.0      1.0      0.0                  command = command + name + ' '
+   758         2         10.0      5.0      0.0              command = 'cat ' + command + ' > ' + this_type + '.fastq.gz'
+   759         2      55644.0  27822.0     87.1              os.system(command)
+   760                                           
+   761         2         10.0      5.0      0.0              for name in filenames:
+   762         2       2413.0   1206.5      3.8                  os.remove(name)
+
+Total time: 0.001436 s
+File: __main__.py
+Function: clean_files at line 764
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   764                                           @profile
+   765                                           def clean_files(output_directory, save_name):
+   766         1        830.0    830.0     57.8      files = glob.glob(output_directory + 'ultraplex_' + save_name + '*')
+   767         2          1.0      0.5      0.1      for file in files:
+   768         2        605.0    302.5     42.1          os.remove(file)
+
+Total time: 0.044835 s
+File: __main__.py
+Function: process_bcs at line 770
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   770                                           @profile
+   771                                           def process_bcs(tsv, mismatch_5p):
+   772         1          1.0      1.0      0.0      barcodes = []
+   773         1          1.0      1.0      0.0      coordinates = {}
+   774                                           
+   775         1          0.0      0.0      0.0      counter = 0  # all 5' barcodes must be consistent
+   776                                           
+   777         1       1628.0   1628.0      3.6      with open(tsv, 'r') as file:
+   778      9216      10469.0      1.1     23.4          for row in file:
+   779      9216       4310.0      0.5      9.6              counter += 1
+   780                                                       # First, find if theres a comma
+   781      9216       9805.0      1.1     21.9              line = row.split('\t')
+   782      9216       5774.0      0.6     12.9              barcodes.append(line[0])
+   783      9216      12844.0      1.4     28.6              coordinates[line[0]]=(line[1],line[2].strip()) #in case \n
+   784                                                       
+   785         1          2.0      2.0      0.0      match_5p = len(barcodes[0]) - mismatch_5p
+   786                                           
+   787         1          1.0      1.0      0.0      return barcodes, coordinates, match_5p
+
+Total time: 0.000306 s
+File: __main__.py
+Function: check_enough_space at line 789
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   789                                           @profile
+   790                                           def check_enough_space(output_directory, input_file,
+   791                                                                  ignore_space_warning, ultra_mode):
+   792                                               # First, find the free space on the output directory
+   793         1          1.0      1.0      0.3      if output_directory == "":
+   794         1         98.0     98.0     32.0          output_directory = os.getcwd()
+   795         1         29.0     29.0      9.5      total, used, free = shutil.disk_usage(output_directory)
+   796                                           
+   797         1          1.0      1.0      0.3      if ultra_mode:
+   798                                                   multiplier = 0.098
+   799                                               else:
+   800         1          1.0      1.0      0.3          multiplier = 0.98
+   801                                           
+   802                                               # Find the size of the input file
+   803         1        173.0    173.0     56.5      input_file_size = Path(input_file).stat().st_size
+   804         1          1.0      1.0      0.3      if ignore_space_warning:
+   805                                                   if not input_file_size < multiplier * free:
+   806                                                       print("WARNING! System may not have enough free space to demultiplex")
+   807                                                       print("(Warning has been ignored)")
+   808                                               else:
+   809         1          2.0      2.0      0.7          assert input_file_size < free * multiplier, "Not enough free space. To ignore this warning use option --ignore_space_warning"
+
+Total time: 0.099124 s
+File: __main__.py
+Function: check_N_position at line 811
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   811                                           @profile
+   812                                           def check_N_position(bcds, type):
+   813                                               # checks that UMI positions result in consistent barcode
+   814         1          1.0      1.0      0.0      if not len(bcds) == 0:
+   815      9216       7906.0      0.9      8.0          for counter, bcd in enumerate(bcds):
+   816                                                       # find positions of non-N
+   817      9216      63347.0      6.9     63.9              non_N = [a for a, b in enumerate(bcd) if b != "N"]
+   818                                           
+   819      9216       4441.0      0.5      4.5              if type == "5":
+   820                                                           # then look for first non N
+   821      9216      14463.0      1.6     14.6                  ref_pos = min(non_N)
+   822                                                       else:
+   823                                                           # look for last non_n
+   824                                                           ref_pos = len(bcd) - max(
+   825                                                               non_N)  # not just max(non_N) because need to allow for different UMI length at 5' end of 3' bcd
+   826                                           
+   827      9215       4963.0      0.5      5.0              if counter == 0:
+   828         1          0.0      0.0      0.0                  correct_pos = ref_pos
+   829                                                       else:
+   830      9215       4003.0      0.4      4.0                  assert ref_pos == correct_pos, "UMI positions not consistent"
+
+Total time: 948.2 s
+File: __main__.py
+Function: main at line 832
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   832                                           @profile
+   833                                           def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
+   834         1        185.0    185.0      0.0      start = time.time()
+   835                                           
+   836                                               ## PARSE COMMAND LINE ARGUMENTS ##
+   837                                           
+   838         1        845.0    845.0      0.0      parser = argparse.ArgumentParser(description='Ultra-fast demultiplexing of fastq files.')
+   839         1          2.0      2.0      0.0      optional = parser._action_groups.pop()
+   840         1         40.0     40.0      0.0      required = parser.add_argument_group('required arguments')
+   841                                               # input
+   842         1          1.0      1.0      0.0      required.add_argument('-i', "--inputfastq", type=str, required=True,
+   843         1         46.0     46.0      0.0                            help='fastq file to be demultiplexed')
+   844                                               # barcodes csv
+   845         1          1.0      1.0      0.0      required.add_argument('-b', "--barcodes", type=str, required=True,
+   846         1         34.0     34.0      0.0                            help='barcodes for demultiplexing in tsv format')
+   847                                               # output directory
+   848         1          1.0      1.0      0.0      optional.add_argument('-d', "--directory", type=str, default="", nargs='?',
+   849         1         38.0     38.0      0.0                            help="optional output directory")
+   850                                               # 5' mismatches
+   851         1          1.0      1.0      0.0      optional.add_argument('-m5', "--fiveprimemismatches", type=int, default=1, nargs='?',
+   852         1         30.0     30.0      0.0                            help='number of mismatches allowed for 5prime barcode [DEFAULT 1]')
+   853                                           
+   854                                               # threads
+   855         1          1.0      1.0      0.0      optional.add_argument('-t', "--threads", type=int, default=4, nargs='?',
+   856         1         29.0     29.0      0.0                            help='threads [DEFAULT 4]')
+   857                                           
+   858                                               # name of output file
+   859         1          1.0      1.0      0.0      optional.add_argument('-o', "--outputprefix", type=str, default="demux", nargs='?',
+   860         1         28.0     28.0      0.0                            help='prefix for output sequences [DEFAULT demux]')
+   861                                               # use sbatch compression in ultra mode
+   862         1          1.0      1.0      0.0      optional.add_argument('-sb', "--sbatchcompression", action='store_true', default=False,
+   863         1         37.0     37.0      0.0                            help='whether to compress output fastq using SLURM sbatch')
+   864                                               # ultra mode
+   865         1          1.0      1.0      0.0      optional.add_argument('-u', "--ultra", action='store_true', default=False,
+   866         1         30.0     30.0      0.0                            help='whether to use ultra mode, which is faster but makes very large temporary files')
+   867                                               # free space ignore warning
+   868         1          0.0      0.0      0.0      optional.add_argument('-ig', "--ignore_space_warning", action='store_true', default=False,
+   869         1         33.0     33.0      0.0                            help='whether to ignore warnings that there is not enough free space')
+   870         1          1.0      1.0      0.0      optional.add_argument("-inm", "--ignore_no_match", action="store_true", default=False,
+   871         1         31.0     31.0      0.0                             help="Do not write reads for which there is no match.")
+   872         1          1.0      1.0      0.0      optional.add_argument("-dbr", "--dont_build_reference", default=False, action="store_true",
+   873         1         28.0     28.0      0.0                            help="Skip the reference building step - for long barcodes this will improve speed.")
+   874         1          1.0      1.0      0.0      optional.add_argument("-ts","--trim-sequences", type=int, default=None, nargs='+', 
+   875         1         30.0     30.0      0.0                          help="Trims from the barcodes in the input file\n" \
+   876                                                                   "The bases given in the list of tuples as START END START END .. where\n" \
+   877                                                                   "START is the integer position of the first base (0 based) and END is the integer\n" \
+   878                                                                   "position of the last base.\nTrimmng sequences can be given several times.")
+   879                                           
+   880         1          0.0      0.0      0.0      parser._action_groups.append(optional)
+   881         1        649.0    649.0      0.0      args = parser.parse_args()
+   882                                           
+   883         1          1.0      1.0      0.0      output_directory = args.directory
+   884                                           
+   885         1          1.0      1.0      0.0      if not output_directory == "":
+   886                                                   if not output_directory[len(output_directory) - 1] == "/":
+   887                                                       output_directory = output_directory + "/"
+   888                                           
+   889                                               # Make output directory
+   890         1          1.0      1.0      0.0      if not output_directory == "":
+   891                                                   if not os.path.exists(output_directory):
+   892                                                       os.mkdir(output_directory)
+   893                                           
+   894         1          6.0      6.0      0.0      logging.basicConfig(level=logging.DEBUG, filename=output_directory + "ultraplex_" + str(start) + ".log",
+   895         1        597.0    597.0      0.0                          filemode="a+", format="%(asctime)-15s %(levelname)-8s %(message)s")
+   896                                           
+   897         1         92.0     92.0      0.0      print(args)
+   898         1        360.0    360.0      0.0      logging.info(args)
+   899                                           
+   900         1          1.0      1.0      0.0      file_name = args.inputfastq
+   901         1          0.0      0.0      0.0      barcodes_tsv = args.barcodes
+   902         1          0.0      0.0      0.0      mismatch_5p = args.fiveprimemismatches
+   903         1          1.0      1.0      0.0      threads = args.threads
+   904         1          1.0      1.0      0.0      save_name = args.outputprefix
+   905         1          1.0      1.0      0.0      sbatch_compression = args.sbatchcompression
+   906         1          1.0      1.0      0.0      ultra_mode = args.ultra
+   907         1          0.0      0.0      0.0      ignore_space_warning = args.ignore_space_warning
+   908         1          0.0      0.0      0.0      ignore_no_match = args.ignore_no_match
+   909         1          1.0      1.0      0.0      dont_build_reference = args.dont_build_reference
+   910                                           
+   911                                           
+   912         1          1.0      1.0      0.0      if ultra_mode:
+   913                                                   print("Warning - ultra mode selected. This will generate very large temporary files!")
+   914                                           
+   915         1          1.0      1.0      0.0      if not ultra_mode:
+   916         1          1.0      1.0      0.0          if sbatch_compression:
+   917                                                       print("sbatch_compression can only be used in conjunction with ultra mode")
+   918                                                       print("setting sbatch_compression to false")
+   919                                                       sbatch_compression = False
+   920                                               
+   921         1          1.0      1.0      0.0      if args.trim_sequences is not None \
+   922                                               and (len(args.trim_sequences) % 2 != 0 or min(args.trim_sequences) < 0): 
+   923                                                   raise ValueError("Invalid trimming sequences given " \
+   924                                                                    "The number of positions given must be even and they must fit into the barcode length.")
+   925                                               
+   926                                               # Make the input trim coordinates a list of tuples
+   927         1          0.0      0.0      0.0      trim_sequences = None
+   928         1          0.0      0.0      0.0      if args.trim_sequences is not None:
+   929                                                   trim_sequences = list()
+   930                                                   sorted_seqs = args.trim_sequences
+   931                                                   #sorted_seqs.sort() #removed for now because of -1 testing
+   932                                           
+   933                                                   for i in range(len(sorted_seqs) - 1):
+   934                                                       if i % 2 == 0:
+   935                                                           trim_sequences.append((sorted_seqs[i], 
+   936                                                                                  sorted_seqs[i+1]))
+   937                                           
+   938                                               # assert output_directory=="" or output_directory[len(output_directory)-1]=="/", "Error! Directory must end with '/'"
+   939                                           
+   940                                               #check_enough_space(output_directory, file_name, ignore_space_warning, ultra_mode, i2)
+   941         1       2215.0   2215.0      0.0      check_enough_space(output_directory, file_name, ignore_space_warning, ultra_mode)
+   942                                           
+   943                                               # process the barcodes csv
+   944                                               #five_p_bcs, three_p_bcs, linked_bcds, min_score_5_p, sample_names = process_bcs(barcodes_tsv, mismatch_5p)
+   945         1      72311.0  72311.0      0.0      barcodes, coordinates, min_score_5_p = process_bcs(barcodes_tsv, mismatch_5p)
+   946                                               
+   947         1     141066.0 141066.0      0.0      check_N_position(barcodes, "5")  # check 3' later so that different 5' barcodes can have different types of 3' bcd
+   948                                           
+   949                                               # remove files from previous runs
+   950         1       1467.0   1467.0      0.0      clean_files(output_directory, save_name)
+   951                                           
+   952                                               # /# Make a queue to which workers that need work will add
+   953                                               # /# a signal
+   954         1       5423.0   5423.0      0.0      need_work_queue = Queue()
+   955         1        244.0    244.0      0.0      total_demultiplexed = Queue()
+   956         1        264.0    264.0      0.0      total_reads_assigned = Queue()
+   957                                           
+   958                                           
+   959                                               # /# make a bunch of workers
+   960         1          1.0      1.0      0.0      workers, all_conn_r, all_conn_w = start_workers(n_workers=threads,
+   961         1          0.0      0.0      0.0                                                      input_file=file_name,
+   962         1          1.0      1.0      0.0                                                      need_work_queue=need_work_queue,
+   963         1          0.0      0.0      0.0                                                      barcodes=barcodes,
+   964         1          0.0      0.0      0.0                                                      coordinates=coordinates,
+   965         1          1.0      1.0      0.0                                                      save_name=save_name,
+   966         1          1.0      1.0      0.0                                                      total_demultiplexed=total_demultiplexed,
+   967         1          1.0      1.0      0.0                                                      total_reads_assigned=total_reads_assigned,
+   968         1          0.0      0.0      0.0                                                      min_score_5_p=min_score_5_p,
+   969         1          0.0      0.0      0.0                                                      ultra_mode=ultra_mode,
+   970         1          0.0      0.0      0.0                                                      output_directory=output_directory,
+   971         1          0.0      0.0      0.0                                                      ignore_no_match=ignore_no_match,
+   972         1          1.0      1.0      0.0                                                      dont_build_reference=dont_build_reference,
+   973         1     290400.0 290400.0      0.0                                                      trim_sequences=trim_sequences)
+   974                                               
+   975         1        207.0    207.0      0.0      print("Demultiplexing...")
+   976         1          7.0      7.0      0.0      reader_process = ReaderProcess(file_name, all_conn_w,
+   977         1        475.0    475.0      0.0                                     need_work_queue, buffer_size)
+   978         1         44.0     44.0      0.0      reader_process.daemon = True
+   979         1  947614346.0 947614346.0     99.9      reader_process.run()
+   980                                           
+   981                                               # concatenate_files(save_name, ultra_mode, sbatch_compression, output_directory, sample_names)
+   982         1      64165.0  64165.0      0.0      concatenate_files(save_name, ultra_mode, sbatch_compression, output_directory)
+   983         1        119.0    119.0      0.0      total_processed_reads = total_demultiplexed.get()[0]
+   984         1        152.0    152.0      0.0      runtime_seconds = str((time.time() - start) // 1)
+   985                                               finishing_msg = "Demultiplexing complete! " + str(
+   986         1        163.0    163.0      0.0          total_processed_reads) + ' reads processed in ' + runtime_seconds + ' seconds'
+   987         1        227.0    227.0      0.0      print(finishing_msg)
+   988         1       2520.0   2520.0      0.0      logging.info(finishing_msg)
+   989                                           
+   990                                               # More stats for logging
+   991         1         79.0     79.0      0.0      total_ass = total_reads_assigned.get()
+   992         1          3.0      3.0      0.0      total_ass_percent = (total_ass / total_processed_reads) * 100
+   993                                               assmsg = str(total_ass) + " (" + str(
+   994         1        163.0    163.0      0.0          round_sig(total_ass_percent, 3)) + "%) reads correctly assigned to sample files"
+   995         1        285.0    285.0      0.0      logging.info(assmsg)
+

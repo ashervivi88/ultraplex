@@ -150,8 +150,12 @@ ultraplex_1689797772.695169.log
 ultraplex_1689797883.7456052.log
 ultraplex_1689797951.707181.log
 ultraplex_1689798184.510026.log
+ultraplex_1689865688.549501.log
 ultraplex__tmp_thread_0.fastq
 ultraplex__tmp_thread_2.fastq
+ultraplex_emmanuelsuxtmp_thread_0.fastq.fastq.gz
+ultraplex_emmanuelsuxtmp_thread_1.fastq.fastq.gz
+ultraplex_env.yml
 uploading_to_servers.info
 dist/ultraplex-1.2.5-py3.6-macosx-10.9-x86_64.egg
 tests/all_simple_tests.readme
@@ -177,12 +181,14 @@ ultraplex/.DS_Store
 ultraplex/__init__.py
 ultraplex/__main__ copy.py
 ultraplex/__main__.py
+ultraplex/__main__.py.lprof
 ultraplex/_align.c
 ultraplex/_align_new.c
 ultraplex/_align_new.pyx
 ultraplex/adapters.py
 ultraplex/align.py
 ultraplex/filters.py
+ultraplex/line_profiler_results.txt
 ultraplex/log.py
 ultraplex/matched-1000.fastq.gz
 ultraplex/modifiers.py
@@ -206,6 +212,18 @@ ultraplex/ultraplex_1689805492.355904.log
 ultraplex/ultraplex_1689805537.073649.log
 ultraplex/ultraplex_1689806115.418506.log
 ultraplex/ultraplex_1689806216.118502.log
+ultraplex/ultraplex_1689863987.8458471.log
+ultraplex/ultraplex_1689864422.2622762.log
+ultraplex/ultraplex_1689865118.247205.log
+ultraplex/ultraplex_1689865125.9389162.log
+ultraplex/ultraplex_1689865169.0714188.log
+ultraplex/ultraplex_1689870888.143604.log
+ultraplex/ultraplex_1689877896.7736928.log
+ultraplex/ultraplex_1689878234.4680388.log
+ultraplex/ultraplex_1689880421.753152.log
+ultraplex/ultraplex_1689880596.772744.log
+ultraplex/ultraplex_1689880684.971746.log
+ultraplex/ultraplex_1689880792.431444.log
 ultraplex/ultraplex_demuxtmp_thread_0.fastq.gz.fastq.gz
 ultraplex/ultraplex_demuxtmp_thread_1.fastq.gz.fastq.gz
 ultraplex/ultraplex_emmanuelsuxtmp_thread_0.fastq.fastq.gz
