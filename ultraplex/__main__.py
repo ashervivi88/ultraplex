@@ -247,6 +247,7 @@ class ReaderProcess(Process):
 	and finally sends the stop token -1 ("poison pills") to all connections.
 	"""
 
+    # @profile
     def __init__(self, file, connections, queue, buffer_size):#, i2):
         # /# Setup the reader process
 
@@ -283,7 +284,7 @@ class ReaderProcess(Process):
                 connection.send(-2)
                 connection.send((e, traceback.format_exc()))
 
-    # @profile
+    #@profile
     def send_to_worker(self, chunk_index, chunk, chunk2=None):
         worker_index = self.queue.get()  # get a worker that needs work
         connection = self.connections[worker_index]  # find the connection to this worker
@@ -361,7 +362,8 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                  min_score_5_p, 
                  ignore_no_match,
                  dont_build_reference,
-                 trim_sequences):
+                 trim_sequences
+                 kmers_dict):
         super().__init__()
         self._id = index  # the worker id
         self._read_pipe = read_pipe  # the pipe the reader reads data from
@@ -381,6 +383,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
         self._barcodes_no_N = remove_Ns_from_barcodes(barcodes)
 
         self._trim_sequences = trim_sequences
+        self._kmers_dict = kmers_dict
         self._coordinates = coordinates
 
     # @profile
@@ -642,13 +645,285 @@ def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
             # print(output)
             file.write(output.encode())
 
+
+def get_kmers_dict(barcodes,k):
+    kmers_dict = {}
+    
+    for barcode in barcodes:
+        prev = ''
+        kmer = 0
+        offset = 0
+
+        width = len(barcode)
+        
+        for i in range(width):
+            x = barcode[i]
+            # print("i: "+str(i))
+            # print("x: "+x)
+            # print("prev: "+prev)
+            # print("kmer: "+str(kmer))
+
+            if i==0 or x==prev: #if starting or staying on same kmer
+                if kmer < k:
+                    kmer+=1
+
+            else: #if ending a kmer
+                key = (str(kmer)+prev, offset)
+                # print("key:" + str(kmer)+prev+ ", " + str(offset))
+                if key in kmers_dict: kmers_dict[key].extend([barcode])
+                else: kmers_dict[key] = [barcode]
+                offset = i
+                kmer=1 
+            if i == width-1:
+                key = (str(kmer)+x, offset)
+                #print("key:" + str(kmer)+prev+ ", " + str(offset))
+                if key in kmers_dict: kmers_dict[key].extend([barcode])
+                else: kmers_dict[key] = [barcode]
+                offset = i
+            prev=x
+            #print("")
+
+    # first_three_items = list(kmers_dict.items())[:3]
+    # print(first_three_items)
+    return kmers_dict
+            
+
+    # first_three_items = list(kmers_dict.items())[:3]
+    # print(first_three_items)
+    return kmers_dict
+
+#A_3[1] = [tgatgtctcccttttagcttttaaaa, tgcttaggggd]
+#A_3[1] = [tgatgtctcccttttagcttttaaaa, tgcttaggggd]
+
+
+    # A = [""]*k
+    # G = [""]*k
+    # T = [""]*k
+    # C = [""]*k
+    
+    # for barcode in barcodes:
+    #     prev = barcode[0]
+    #     kmer = 0
+    #     for x, i in barcode:
+    #         if x==prev:
+    #             if kmer < k:
+    #                 kmer+1
+    #         else:
+    #             if x == "A": A[kmer] = {barcode:i}
+    #             if x == "G": A[kmer] = {barcode:i}
+    #             if x == "T": A[kmer] = {barcode:i}
+    #             if x == "C": A[kmer] = {barcode:i}
+                
+    #             prev=x
+    #             kmer=0
+    
+# def get_kmers(barcode,k):
+#     kmers = []
+#     prev = barcode[0]
+#     kmer = 0
+#     start = False
+    
+#     for x, i in barcode:
+#         if x == 'N': 
+#             start = True
+#             prev = barcode[i+1]
+    
+#         if start == True:
+#             if x==prev:
+#                 if kmer < k:
+#                     kmer+1
+#             else:
+#                 key = prev + "_" + str(kmer) + str(i)
+#                 kmers.append(key)
+#                 prev=x
+#                 kmer=0
+#     return kmers
+
+def get_kmers(barcode,k):
+    kmers = []
+    prev = ''
+    kmer = 0
+    offset = 0
+    width = len(barcode)
+        
+    for i in range(width):
+        x = barcode[i]
+
+        if i==0 or x==prev: #if starting or staying on same kmer
+            if kmer < k:
+                kmer+=1
+        else: #if ending a kmer
+            key = (str(kmer)+prev, offset)
+            if prev !='N': kmers.append(key)
+            offset = i
+            kmer=1 
+        if i == width-1: # if end of the string
+            key = (str(kmer)+x, offset)
+            if x !='N': kmers.append(key)
+            offset = i
+        prev=x
+    return kmers
+
+    # for x, i in barcode:
+    #     if prev == 'N':
+    #         prev = x
+    #     if x != 'N': 
+    #         prev = barcode[i]
+    #         if x==prev:
+    #             if kmer < k:
+    #                 kmer+1
+    #         else:
+    #             key = prev + "_" + str(kmer) + str(i)
+    #             kmers.append(key)
+    #             prev=x
+    #             kmer=0
+    # return kmers
+
+
+    # for barcode in barcodes:
+    #     prev = ''
+    #     kmer = 0
+    #     offset = 0
+
+    #     width = len(barcode)
+        
+    #     for i in range(width):
+    #         x = barcode[i]
+    #         # print("i: "+str(i))
+    #         # print("x: "+x)
+    #         # print("prev: "+prev)
+    #         # print("kmer: "+str(kmer))
+
+    #         if i==0 or x==prev: #if starting or staying on same kmer
+    #             if kmer < k:
+    #                 kmer+=1
+
+    #         else: #if ending a kmer
+    #             key = (str(kmer)+prev, offset)
+    #             # print("key:" + str(kmer)+prev+ ", " + str(offset))
+    #             if key in kmers_dict: kmers_dict[key].extend([barcode])
+    #             else: kmers_dict[key] = [barcode]
+    #             offset = i
+    #             kmer=1 
+    #         if i == width-1:
+    #             key = (str(kmer)+x, offset)
+    #             #print("key:" + str(kmer)+prev+ ", " + str(offset))
+    #             if key in kmers_dict: kmers_dict[key].extend([barcode])
+    #             else: kmers_dict[key] = [barcode]
+    #             offset = i
+    #         prev=x
+    #         #print("")
+
+    # # first_three_items = list(kmers_dict.items())[:3]
+    # # print(first_three_items)
+    # return kmers_dict
+
+def get_candidates(sequence, k, kmers_dict):
+    """
+    Returns candidate barcodes for a read barcode
+    as a list of barcodes
+    First, split the barcode in kmers and then
+    finds all the candidate barcodes of the kmers
+    :param read_barcode the barcode from which to get candidates
+    :return a list of candidates barcodes
+    """
+    # NOTE probably faster to keep kmer_offsets in memory as we will call
+    #      this function several times with the same barcode but we get a penalty in memory use
+
+    sequence_kmers = get_kmers(sequence,k)
+    pool = []
+    for key in sequence_kmers:
+        pool.append(kmers_dict[key])
+        pool.append(kmers_dict[(key)])
+
+    
+    # # Iterate all the kmer-offset combinations found in the input barcode
+    # for kmer, offset in kmers_offsets:
+    #     # Obtain all the barcodes that matched for the current kmer
+    #     try:
+    #         hits = kmer2seq[kmer]
+    #     except KeyError:
+    #         continue
+    #     # For each true barcode containing read's kmer.
+    #     # Hit refers to barcode and hit_offsets to where the kmer was in the barcode
+    #     for hit, hit_offsets in list(hits.items()):
+    #         # if no_offset_speedup:
+    #         #     # NON-OPTIMIZED CASE
+    #         #     # For each kmer in read (typically incremented by k positions at a time).
+    #         #     candidates[hit] = 0
+    #         #     continue
+    #         # OPTIMIZED CASE
+    #         # For each kmer in read (typically incremented by k positions at a time).
+    #         min_penalty = 100000000
+    #         # For each position that kmer occurred in the true barcode.
+    #         # Get the minimum penalty
+    #         for hit_offset in hit_offsets:
+    #             # Kmer may be shifted overhang positions without penalty, due to subglobal alignment.
+    #             penalty = max(0, abs(offset - hit_offset) - pre_overhang - post_overhang)
+    #             if penalty < min_penalty: min_penalty = penalty
+    #         # Assign the min penalty to the candidate (if exists already take max)
+    #         # TODO if there are several equal barcode candidates for different kmers,
+    #         #      why keep the max penalty and not an average?
+    #         candidates[hit] = max(min_penalty, candidates[hit])
+            
+    # # Clear out all candidates with a forced offset penalty greater than the max edit distance and return
+    # return [hit for hit,penal in list(candidates.items()) if penal <= max_edit_distance]
+
+# def get_candidates(sequence):
+#     """
+#     Returns candidate barcodes for a read barcode
+#     as a list of barcodes
+#     First, split the barcode in kmers and then
+#     finds all the candidate barcodes of the kmers
+#     :param read_barcode the barcode from which to get candidates
+#     :return a list of candidates barcodes
+#     """
+#     # NOTE probably faster to keep kmer_offsets in memory as we will call
+#     #      this function several times with the same barcode but we get a penalty in memory use
+
+#     kmers_offsets = ku.get_kmers(sequence, k)
+
+    
+#     # Iterate all the kmer-offset combinations found in the input barcode
+#     for kmer, offset in kmers_offsets:
+#         # Obtain all the barcodes that matched for the current kmer
+#         try:
+#             hits = kmer2seq[kmer]
+#         except KeyError:
+#             continue
+#         # For each true barcode containing read's kmer.
+#         # Hit refers to barcode and hit_offsets to where the kmer was in the barcode
+#         for hit, hit_offsets in list(hits.items()):
+#             # if no_offset_speedup:
+#             #     # NON-OPTIMIZED CASE
+#             #     # For each kmer in read (typically incremented by k positions at a time).
+#             #     candidates[hit] = 0
+#             #     continue
+#             # OPTIMIZED CASE
+#             # For each kmer in read (typically incremented by k positions at a time).
+#             min_penalty = 100000000
+#             # For each position that kmer occurred in the true barcode.
+#             # Get the minimum penalty
+#             for hit_offset in hit_offsets:
+#                 # Kmer may be shifted overhang positions without penalty, due to subglobal alignment.
+#                 penalty = max(0, abs(offset - hit_offset) - pre_overhang - post_overhang)
+#                 if penalty < min_penalty: min_penalty = penalty
+#             # Assign the min penalty to the candidate (if exists already take max)
+#             # TODO if there are several equal barcode candidates for different kmers,
+#             #      why keep the max penalty and not an average?
+#             candidates[hit] = max(min_penalty, candidates[hit])
+            
+#     # Clear out all candidates with a forced offset penalty greater than the max edit distance and return
+#     return [hit for hit,penal in list(candidates.items()) if penal <= max_edit_distance]
+
 # @profile
 def five_p_demulti(read, barcodes_no_N=[], min_score=0):
     """
     this function demultiplexes on the 5' end
     """
     sequence_length = len(read.sequence)
-    winner = score_barcode_for_dict(read.sequence, barcodes_no_N, min_score, Ns_removed=True)
+    candidates = get_candidates(barcodes_no_N)
+    winner = score_barcode_for_dict(read.sequence, candidates, min_score, Ns_removed=True)
     if sequence_length < len(winner):  # read is too short to contain barcode
         winner = "no_match"
     # if sequence_length > max(five_p_bc_pos):
@@ -691,7 +966,8 @@ def start_workers(n_workers, input_file, need_work_queue, #adapter,
                   min_score_5_p, #three_p_mismatches, linked_bcds, three_p_trim_q,
                   ultra_mode, output_directory, #final_min_length, q5, i2, adapter2, min_trim,
                   ignore_no_match, dont_build_reference, #keep_barcode, trim_sequences):
-                  trim_sequences):
+                  trim_sequences
+                  kmers_dict):
     """
 	This function starts all the workers
 	"""
@@ -722,6 +998,7 @@ def start_workers(n_workers, input_file, need_work_queue, #adapter,
                                ignore_no_match=ignore_no_match,
                                dont_build_reference=dont_build_reference,
                                trim_sequences=trim_sequences
+                               kmers_dict=kmers_dict
                                )
 
         worker.start()
@@ -989,6 +1266,8 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     #five_p_bcs, three_p_bcs, linked_bcds, min_score_5_p, sample_names = process_bcs(barcodes_tsv, mismatch_5p)
     barcodes, coordinates, min_score_5_p = process_bcs(barcodes_tsv, mismatch_5p)
     
+    kmers_dict = get_kmers_dict(barcodes, len(barcodes[0]))
+    
     #check_N_position(barcodes, "5")  # check 3' later so that different 5' barcodes can have different types of 3' bcd
 
     # remove files from previous runs
@@ -1015,7 +1294,8 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
                                                     output_directory=output_directory,
                                                     ignore_no_match=ignore_no_match,
                                                     dont_build_reference=dont_build_reference,
-                                                    trim_sequences=trim_sequences)
+                                                    trim_sequences=trim_sequences
+                                                    kmers_dict=kmers_dict)
     
     print("Demultiplexing...")
     reader_process = ReaderProcess(file_name, all_conn_w,

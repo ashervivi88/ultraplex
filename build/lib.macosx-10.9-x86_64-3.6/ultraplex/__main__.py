@@ -247,6 +247,7 @@ class ReaderProcess(Process):
 	and finally sends the stop token -1 ("poison pills") to all connections.
 	"""
 
+    # @profile
     def __init__(self, file, connections, queue, buffer_size):#, i2):
         # /# Setup the reader process
 
@@ -283,7 +284,7 @@ class ReaderProcess(Process):
                 connection.send(-2)
                 connection.send((e, traceback.format_exc()))
 
-    # @profile
+    #@profile
     def send_to_worker(self, chunk_index, chunk, chunk2=None):
         worker_index = self.queue.get()  # get a worker that needs work
         connection = self.connections[worker_index]  # find the connection to this worker
@@ -989,7 +990,7 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     #five_p_bcs, three_p_bcs, linked_bcds, min_score_5_p, sample_names = process_bcs(barcodes_tsv, mismatch_5p)
     barcodes, coordinates, min_score_5_p = process_bcs(barcodes_tsv, mismatch_5p)
     
-    check_N_position(barcodes, "5")  # check 3' later so that different 5' barcodes can have different types of 3' bcd
+    #check_N_position(barcodes, "5")  # check 3' later so that different 5' barcodes can have different types of 3' bcd
 
     # remove files from previous runs
     clean_files(output_directory, save_name)
