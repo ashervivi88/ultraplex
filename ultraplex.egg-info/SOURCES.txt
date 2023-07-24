@@ -187,6 +187,7 @@ ultraplex/_align_new.c
 ultraplex/_align_new.pyx
 ultraplex/adapters.py
 ultraplex/align.py
+ultraplex/cprofile_results.txt
 ultraplex/filters.py
 ultraplex/line_profiler_results.txt
 ultraplex/log.py
@@ -235,6 +236,11 @@ ultraplex/ultraplex_1689881935.818954.log
 ultraplex/ultraplex_1689882428.369612.log
 ultraplex/ultraplex_1689882528.577348.log
 ultraplex/ultraplex_1689882843.861836.log
+ultraplex/ultraplex_1689883398.682112.log
+ultraplex/ultraplex_1689884524.721164.log
+ultraplex/ultraplex_1689884670.03749.log
+ultraplex/ultraplex_1689884920.519068.log
+ultraplex/ultraplex_1689885366.398956.log
 ultraplex/ultraplex_demuxtmp_thread_0.fastq.gz.fastq.gz
 ultraplex/ultraplex_demuxtmp_thread_1.fastq.gz.fastq.gz
 ultraplex/ultraplex_emmanuelsuxtmp_thread_0.fastq.fastq.gz

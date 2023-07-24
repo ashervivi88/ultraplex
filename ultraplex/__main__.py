@@ -15,6 +15,7 @@ import argparse
 import shutil
 from pathlib import Path
 import logging
+import sys
 from math import log10, floor
 import numpy as np
 
@@ -82,7 +83,7 @@ def user_trim(read, trim_sequences):
     """Simply helper function to remove
     helper sequences from a barcode"""
     
-    if len(read.sequence) <= trim_sequences[-1][-1]:
+    if len(read.sequence) < trim_sequences[-1][-1]:
         raise ValueError("Invalid trimming sequences given " \
                          "The number of positions given must be even and they must fit into the barcode length.")
 
@@ -190,6 +191,7 @@ def remove_Ns_from_barcodes(barcodes):
 #     return winner
 
 # @profile
+
 def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed):
     """
 	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
@@ -272,6 +274,7 @@ class ReaderProcess(Process):
         try:
             with xopen(self.file, 'rb') as f:
                 for chunk_index, chunk in enumerate(dnaio.read_chunks(f, self.buffer_size)):
+                    #print("Ahsley needs help",chunk_index,sys.getsizeof(chunk))
                     self.send_to_worker(chunk_index, chunk)
 
             # Send poison pills to all workers
@@ -362,8 +365,9 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                  min_score_5_p, 
                  ignore_no_match,
                  dont_build_reference,
-                 trim_sequences
+                 trim_sequences,
                  kmers_dict):
+        
         super().__init__()
         self._id = index  # the worker id
         self._read_pipe = read_pipe  # the pipe the reader reads data from
@@ -422,6 +426,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                 reads_written += 1
                 #umi = ""
                 
+                read = user_trim(read, [(10,24),(34,50)])
                 # trim_sequences = [(30, 34), (80, 88), (90, 100)]
                 trim_sequences = self._trim_sequences
                 if trim_sequences:
@@ -432,13 +437,15 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                 read.name = read.name.replace(" ", "").replace("/", "").replace("\\",
                                                                                 "")  # remove bad characters
 
+                #print(read)
                 read, five_p_bc = five_p_demulti(read,
                                                                     #self._five_p_barcodes_pos,
                                                                     #self._five_p_umi_poses,
                                                                     #self._five_p_bc_dict,
                                                                     #add_umi=True,
                                                                     barcodes_no_N=self._barcodes_no_N,
-                                                                    min_score=self._min_score_5_p)
+                                                                    min_score=self._min_score_5_p,
+                                                                    kmers_dict=self._kmers_dict)
                                                                     #keep_barcode=self._keep_barcode)
                                                                     
                 
@@ -645,7 +652,7 @@ def write_tmp_files(output_dir, save_name, demulti_type, worker_id, reads,
             # print(output)
             file.write(output.encode())
 
-
+#@profile
 def get_kmers_dict(barcodes,k):
     kmers_dict = {}
     
@@ -668,29 +675,31 @@ def get_kmers_dict(barcodes,k):
                     kmer+=1
 
             else: #if ending a kmer
-                key = (str(kmer)+prev, offset)
-                # print("key:" + str(kmer)+prev+ ", " + str(offset))
-                if key in kmers_dict: kmers_dict[key].extend([barcode])
-                else: kmers_dict[key] = [barcode]
-                offset = i
+                if kmer>1:
+                    key = (kmer, prev, offset)
+                    #print(str(kmer) + " " + prev + " " + str(offset))
+                    if key in kmers_dict: kmers_dict[key].extend([barcode])
+                    else: kmers_dict[key] = [barcode]
+                    offset = i
                 kmer=1 
             if i == width-1:
-                key = (str(kmer)+x, offset)
-                #print("key:" + str(kmer)+prev+ ", " + str(offset))
-                if key in kmers_dict: kmers_dict[key].extend([barcode])
-                else: kmers_dict[key] = [barcode]
-                offset = i
+                if kmer>1:
+                    key = (kmer, x, offset)
+                    #print(str(kmer) + " " + prev + " " + str(offset))
+                    if key in kmers_dict: kmers_dict[key].extend([barcode])
+                    else: kmers_dict[key] = [barcode]
+                    offset = i
             prev=x
             #print("")
 
-    # first_three_items = list(kmers_dict.items())[:3]
-    # print(first_three_items)
+    #first_three_items = list(kmers_dict.items())[:3]
+    #print(first_three_items)
     return kmers_dict
             
 
     # first_three_items = list(kmers_dict.items())[:3]
     # print(first_three_items)
-    return kmers_dict
+    # return kmers_dict
 
 #A_3[1] = [tgatgtctcccttttagcttttaaaa, tgcttaggggd]
 #A_3[1] = [tgatgtctcccttttagcttttaaaa, tgcttaggggd]
@@ -739,28 +748,31 @@ def get_kmers_dict(barcodes,k):
 #                 kmer=0
 #     return kmers
 
-def get_kmers(barcode,k):
+#@profile
+def get_kmers(sequence,k):
     kmers = []
     prev = ''
     kmer = 0
     offset = 0
-    width = len(barcode)
+    width = len(sequence)
         
     for i in range(width):
-        x = barcode[i]
+        x = sequence[i]
 
         if i==0 or x==prev: #if starting or staying on same kmer
             if kmer < k:
                 kmer+=1
         else: #if ending a kmer
-            key = (str(kmer)+prev, offset)
-            if prev !='N': kmers.append(key)
-            offset = i
+            if kmer > 1:
+                key = (kmer, prev, offset)
+                if prev !='N': kmers.append(key)
+                offset = i
             kmer=1 
         if i == width-1: # if end of the string
-            key = (str(kmer)+x, offset)
-            if x !='N': kmers.append(key)
-            offset = i
+            if kmer > 1:
+                key = (kmer, x, offset)
+                if x !='N': kmers.append(key)
+                offset = i
         prev=x
     return kmers
 
@@ -778,7 +790,6 @@ def get_kmers(barcode,k):
     #             prev=x
     #             kmer=0
     # return kmers
-
 
     # for barcode in barcodes:
     #     prev = ''
@@ -818,7 +829,9 @@ def get_kmers(barcode,k):
     # # print(first_three_items)
     # return kmers_dict
 
-def get_candidates(sequence, k, kmers_dict):
+# start = time.time()
+#@profile
+def get_candidates(sequence, kmers_dict):
     """
     Returns candidate barcodes for a read barcode
     as a list of barcodes
@@ -830,11 +843,47 @@ def get_candidates(sequence, k, kmers_dict):
     # NOTE probably faster to keep kmer_offsets in memory as we will call
     #      this function several times with the same barcode but we get a penalty in memory use
 
+    k=2
     sequence_kmers = get_kmers(sequence,k)
-    pool = []
+    pool = {}
     for key in sequence_kmers:
-        pool.append(kmers_dict[key])
-        pool.append(kmers_dict[(key)])
+        kmer_len = key[0]
+        nt = key[1]
+        pos = key[2]
+        
+        if key in kmers_dict:
+            pool.update({key: kmers_dict[key]})
+        
+        up_pos = pos
+        down_pos = pos
+        
+        
+        while up_pos < k + pos:
+            new_key = (kmer_len,nt,up_pos)
+            if new_key in kmers_dict and new_key not in pool:
+                pool.update({new_key: kmers_dict[new_key]})
+            new_key = (kmer_len+1,nt,up_pos)
+            if new_key in kmers_dict and new_key not in pool:
+                pool.update({new_key: kmers_dict[new_key]})
+            up_pos+=1
+
+        thresh = max(0, down_pos-k)
+        while down_pos >= thresh:
+            new_key = (kmer_len,nt,down_pos)
+            if new_key in kmers_dict and new_key not in pool:
+                pool.update({new_key: kmers_dict[new_key]})
+            new_key = (kmer_len+1,nt,down_pos)
+            if new_key in kmers_dict and new_key not in pool:
+                pool.update({new_key: kmers_dict[new_key]})
+            down_pos-=1
+        
+        unique_barcode_set = set()
+        for lst in pool.values():
+            unique_barcode_set.update(lst)
+        # end = time.time()
+        # print(end - start)
+        #print(len(unique_barcode_set))
+    return list(unique_barcode_set)
 
     
     # # Iterate all the kmer-offset combinations found in the input barcode
@@ -917,12 +966,13 @@ def get_candidates(sequence, k, kmers_dict):
 #     return [hit for hit,penal in list(candidates.items()) if penal <= max_edit_distance]
 
 # @profile
-def five_p_demulti(read, barcodes_no_N=[], min_score=0):
+def five_p_demulti(read, kmers_dict, barcodes_no_N=[], min_score=0):
     """
     this function demultiplexes on the 5' end
     """
     sequence_length = len(read.sequence)
-    candidates = get_candidates(barcodes_no_N)
+    candidates = get_candidates(read.sequence, kmers_dict)
+    #print(read.sequence)
     winner = score_barcode_for_dict(read.sequence, candidates, min_score, Ns_removed=True)
     if sequence_length < len(winner):  # read is too short to contain barcode
         winner = "no_match"
@@ -966,8 +1016,8 @@ def start_workers(n_workers, input_file, need_work_queue, #adapter,
                   min_score_5_p, #three_p_mismatches, linked_bcds, three_p_trim_q,
                   ultra_mode, output_directory, #final_min_length, q5, i2, adapter2, min_trim,
                   ignore_no_match, dont_build_reference, #keep_barcode, trim_sequences):
-                  trim_sequences
-                  kmers_dict):
+                  trim_sequences,
+                  kmers_dict,buffer_size):
     """
 	This function starts all the workers
 	"""
@@ -997,7 +1047,7 @@ def start_workers(n_workers, input_file, need_work_queue, #adapter,
                                min_score_5_p=min_score_5_p,
                                ignore_no_match=ignore_no_match,
                                dont_build_reference=dont_build_reference,
-                               trim_sequences=trim_sequences
+                               trim_sequences=trim_sequences,
                                kmers_dict=kmers_dict
                                )
 
@@ -1152,7 +1202,8 @@ def check_N_position(bcds, type):
                 assert ref_pos == correct_pos, "UMI positions not consistent"
 
 # @profile
-def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
+# def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
+def main(buffer_size=int(50 * 1024 ** 1)):  # 4 MB
     start = time.time()
 
     ## PARSE COMMAND LINE ARGUMENTS ##
@@ -1169,6 +1220,8 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     # output directory
     optional.add_argument('-d', "--directory", type=str, default="", nargs='?',
                           help="optional output directory")
+    optional.add_argument('-bs', "--buffersize", type=int, default=50, nargs='?',
+                          help="Buffer Size in kb [DEFAULT 50]")
     # 5' mismatches
     optional.add_argument('-m5', "--fiveprimemismatches", type=int, default=1, nargs='?',
                           help='number of mismatches allowed for 5prime barcode [DEFAULT 1]')
@@ -1229,7 +1282,7 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     ignore_space_warning = args.ignore_space_warning
     ignore_no_match = args.ignore_no_match
     dont_build_reference = args.dont_build_reference
-
+    buffer_size = args.buffersize * 1024
 
     if ultra_mode:
         print("Warning - ultra mode selected. This will generate very large temporary files!")
@@ -1266,7 +1319,12 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
     #five_p_bcs, three_p_bcs, linked_bcds, min_score_5_p, sample_names = process_bcs(barcodes_tsv, mismatch_5p)
     barcodes, coordinates, min_score_5_p = process_bcs(barcodes_tsv, mismatch_5p)
     
+    
+    # start = time.time()
     kmers_dict = get_kmers_dict(barcodes, len(barcodes[0]))
+    # end = time.time()
+    # print(end - start)
+    #print(kmers_dict)
     
     #check_N_position(barcodes, "5")  # check 3' later so that different 5' barcodes can have different types of 3' bcd
 
@@ -1294,8 +1352,9 @@ def main(buffer_size=int(4 * 1024 ** 2)):  # 4 MB
                                                     output_directory=output_directory,
                                                     ignore_no_match=ignore_no_match,
                                                     dont_build_reference=dont_build_reference,
-                                                    trim_sequences=trim_sequences
-                                                    kmers_dict=kmers_dict)
+                                                    trim_sequences=trim_sequences,
+                                                    kmers_dict=kmers_dict,
+                                                    buffer_size=buffer_size)
     
     print("Demultiplexing...")
     reader_process = ReaderProcess(file_name, all_conn_w,
