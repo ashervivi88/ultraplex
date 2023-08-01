@@ -1,0 +1,3 @@
+2023-07-25 10:32:45,310 INFO     Namespace(barcodes='/Users/akim/Desktop/uST_barcodes_trim.tsv', buffersize=40, directory='', dont_build_reference=True, fiveprimemismatches=1, ignore_no_match=False, ignore_space_warning=False, inputfastq='/Users/akim/Desktop/4000.fq.gz', outputprefix='no_concat_chunks', sbatchcompression=False, threads=4, trim_sequences=None, ultra=False)
+2023-07-25 10:32:55,080 INFO     Demultiplexing complete! 1000 reads processed in 9.0 seconds
+2023-07-25 10:32:55,082 INFO     0 (0%) reads correctly assigned to sample files

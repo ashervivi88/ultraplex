@@ -1,0 +1,1 @@
+2023-07-24 17:24:34,949 INFO     Namespace(barcodes='/Users/akim/Desktop/uST_barcodes_trim.tsv', buffersize=40, directory='', dont_build_reference=True, fiveprimemismatches=1, ignore_no_match=False, ignore_space_warning=False, inputfastq='/Users/akim/Desktop/4000.fq.gz', outputprefix='no_concat_chunks', sbatchcompression=False, threads=4, trim_sequences=None, ultra=False)

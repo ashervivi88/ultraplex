@@ -21,6 +21,7 @@ ext = '.pyx' if USE_CYTHON else '.c'
 extensions = [
     Extension('_align_new', sources=['ultraplex/_align_new' + ext]),
     Extension('qualtrim_new', sources=['ultraplex/qualtrim_new' + ext]),
+    Extension('search_funcs', sources=['ultraplex/search_funcs'+ext]),
 ]
 
 if USE_CYTHON:

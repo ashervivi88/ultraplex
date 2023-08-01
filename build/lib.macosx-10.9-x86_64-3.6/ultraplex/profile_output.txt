@@ -1,0 +1,198 @@
+Timer unit: 1e-06 s
+
+Total time: 0 s
+File: __main__.py
+Function: score_barcode_for_dict at line 193
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   193                                           @profile
+   194                                           def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed):
+   195                                               """
+   196                                           	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
+   197                                           	"""
+   198                                           
+   199                                               if seq in barcodes:  # no need to check all barcodes
+   200                                                   winner = seq  # barcode WITH Ns included
+   201                                               # elif min_score == len(barcodes_no_N):  # i.e. no matches allowed, and seq not in barcodes
+   202                                               #     winner = "no_match"
+   203                                                   # print(seq)
+   204                                                   # print(winner)
+   205                                                   # print("")
+   206                                               else:  # mismatches allowed so need to check
+   207                                                   dists = {}
+   208                                           
+   209                                                   for this_bc in barcodes:
+   210                                                       # # score the barcode against the read, penalty for N in the read
+   211                                                       # score = sum(a == b for a, b in zip(this_bc, seq))
+   212                                                       # scores[this_bc] = score
+   213                                                       if this_bc != "no_match":
+   214                                                           #dist = subglobal_distance(this_bc, seq)
+   215                                                           dist = hamming_distance(this_bc, seq)
+   216                                                           dists[this_bc] = dist
+   217                                           
+   218                                                   # Find the best score
+   219                                                   min_dist = min(dists.values())
+   220                                           
+   221                                                   if min_dist > max_edit_distance:
+   222                                                       winner = "no_match"
+   223                                                   else:
+   224                                                       # check that there is only one barcode with the max score
+   225                                                       filtered = [a for a, b in dists.items() if b == min_dist]
+   226                                                       # if len(filtered) > 1:
+   227                                                       #     winner = "no_match-ambiguous" #need to decide how to fix the multiple matches situation
+   228                                                       # else:  # if there is only one
+   229                                                       #     winner = barcodes[filtered[0]]  # barcode WITH Ns included
+   230                                                       #print(dists)
+   231                                                       winner = filtered[0]  # barcode WITH Ns included
+   232                                               #     print(min_dist)
+   233                                               # print(seq)
+   234                                               # print(winner)
+   235                                               # print("")
+   236                                               return winner
+
+Total time: 0.81773 s
+File: __main__.py
+Function: get_kmers_dict at line 653
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   653                                           @profile
+   654                                           def get_kmers_dict(barcodes,k):
+   655         1        199.0    199.0      0.0      kmers_dict = {}
+   656                                               
+   657      9216       5744.0      0.6      0.7      for barcode in barcodes:
+   658      9216       4184.0      0.5      0.5          prev = ''
+   659      9216       3774.0      0.4      0.5          kmer = 0
+   660      9216       3812.0      0.4      0.5          offset = 0
+   661                                           
+   662      9216       6270.0      0.7      0.8          width = len(barcode)
+   663                                                   
+   664    184320     111563.0      0.6     13.6          for i in range(width):
+   665    184320      96344.0      0.5     11.8              x = barcode[i]
+   666                                                       # print("i: "+str(i))
+   667                                                       # print("x: "+x)
+   668                                                       # print("prev: "+prev)
+   669                                                       # print("kmer: "+str(kmer))
+   670                                           
+   671    130560      72209.0      0.6      8.8              if i==0 or x==prev: #if starting or staying on same kmer
+   672     53760      25191.0      0.5      3.1                  if kmer < k:
+   673     53760      32626.0      0.6      4.0                      kmer+=1
+   674                                           
+   675                                                       else: #if ending a kmer
+   676     97344      47493.0      0.5      5.8                  if kmer>1:
+   677     33216      18901.0      0.6      2.3                      key = (kmer, prev, offset)
+   678                                                               #print(str(kmer) + " " + prev + " " + str(offset))
+   679     33166      40770.0      1.2      5.0                      if key in kmers_dict: kmers_dict[key].extend([barcode])
+   680        50         61.0      1.2      0.0                      else: kmers_dict[key] = [barcode]
+   681     33216      20369.0      0.6      2.5                      offset = i
+   682    130560      74476.0      0.6      9.1                  kmer=1 
+   683    175104     126209.0      0.7     15.4              if i == width-1:
+   684      9216       4884.0      0.5      0.6                  if kmer>1:
+   685      9216       5420.0      0.6      0.7                      key = (kmer, x, offset)
+   686                                                               #print(str(kmer) + " " + prev + " " + str(offset))
+   687      9208      12496.0      1.4      1.5                      if key in kmers_dict: kmers_dict[key].extend([barcode])
+   688         8         10.0      1.2      0.0                      else: kmers_dict[key] = [barcode]
+   689      9216       5776.0      0.6      0.7                      offset = i
+   690    184320      98948.0      0.5     12.1              prev=x
+   691                                                       #print("")
+   692                                           
+   693                                               #first_three_items = list(kmers_dict.items())[:3]
+   694                                               #print(first_three_items)
+   695         1          1.0      1.0      0.0      return kmers_dict
+
+Total time: 0 s
+File: __main__.py
+Function: get_kmers at line 749
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   749                                           @profile
+   750                                           def get_kmers(sequence,k):
+   751                                               kmers = []
+   752                                               prev = ''
+   753                                               kmer = 0
+   754                                               offset = 0
+   755                                               width = len(sequence)
+   756                                                   
+   757                                               for i in range(width):
+   758                                                   x = sequence[i]
+   759                                           
+   760                                                   if i==0 or x==prev: #if starting or staying on same kmer
+   761                                                       if kmer < k:
+   762                                                           kmer+=1
+   763                                                   else: #if ending a kmer
+   764                                                       if kmer > 1:
+   765                                                           key = (kmer, prev, offset)
+   766                                                           if prev !='N': kmers.append(key)
+   767                                                           offset = i
+   768                                                       kmer=1 
+   769                                                   if i == width-1: # if end of the string
+   770                                                       if kmer > 1:
+   771                                                           key = (kmer, x, offset)
+   772                                                           if x !='N': kmers.append(key)
+   773                                                           offset = i
+   774                                                   prev=x
+   775                                               return kmers
+
+Total time: 0 s
+File: __main__.py
+Function: get_candidates at line 831
+
+Line #      Hits         Time  Per Hit   % Time  Line Contents
+==============================================================
+   831                                           @profile
+   832                                           def get_candidates(sequence, kmers_dict):
+   833                                               """
+   834                                               Returns candidate barcodes for a read barcode
+   835                                               as a list of barcodes
+   836                                               First, split the barcode in kmers and then
+   837                                               finds all the candidate barcodes of the kmers
+   838                                               :param read_barcode the barcode from which to get candidates
+   839                                               :return a list of candidates barcodes
+   840                                               """
+   841                                               # NOTE probably faster to keep kmer_offsets in memory as we will call
+   842                                               #      this function several times with the same barcode but we get a penalty in memory use
+   843                                           
+   844                                               k=2
+   845                                               sequence_kmers = get_kmers(sequence,k)
+   846                                               pool = {}
+   847                                               for key in sequence_kmers:
+   848                                                   kmer_len = key[0]
+   849                                                   nt = key[1]
+   850                                                   pos = key[2]
+   851                                                   
+   852                                                   if key in kmers_dict:
+   853                                                       pool.update({key: kmers_dict[key]})
+   854                                                   
+   855                                                   up_pos = pos
+   856                                                   down_pos = pos
+   857                                                   
+   858                                                   
+   859                                                   while up_pos < k + pos:
+   860                                                       new_key = (kmer_len,nt,up_pos)
+   861                                                       if new_key in kmers_dict and new_key not in pool:
+   862                                                           pool.update({new_key: kmers_dict[new_key]})
+   863                                                       new_key = (kmer_len+1,nt,up_pos)
+   864                                                       if new_key in kmers_dict and new_key not in pool:
+   865                                                           pool.update({new_key: kmers_dict[new_key]})
+   866                                                       up_pos+=1
+   867                                           
+   868                                                   thresh = max(0, down_pos-k)
+   869                                                   while down_pos >= thresh:
+   870                                                       new_key = (kmer_len,nt,down_pos)
+   871                                                       if new_key in kmers_dict and new_key not in pool:
+   872                                                           pool.update({new_key: kmers_dict[new_key]})
+   873                                                       new_key = (kmer_len+1,nt,down_pos)
+   874                                                       if new_key in kmers_dict and new_key not in pool:
+   875                                                           pool.update({new_key: kmers_dict[new_key]})
+   876                                                       down_pos-=1
+   877                                                   
+   878                                                   unique_barcode_set = set()
+   879                                                   for lst in pool.values():
+   880                                                       unique_barcode_set.update(lst)
+   881                                                   # end = time.time()
+   882                                                   # print(end - start)
+   883                                                   #print(len(unique_barcode_set))
+   884                                               return list(unique_barcode_set)
+

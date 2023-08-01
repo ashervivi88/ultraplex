@@ -1,3 +1,4 @@
 _align_new
 qualtrim_new
+search_funcs
 ultraplex

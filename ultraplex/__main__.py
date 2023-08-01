@@ -18,6 +18,14 @@ import logging
 import sys
 from math import log10, floor
 import numpy as np
+import copy
+# import pyximport
+# pyximport.install()
+# cimport cython
+# from search_funcs import hamming_distance_cpdef, get_kmers_cpdef
+#import pyximport
+#pyximport.install(setup_args={"script_args" : ["--verbose"]})
+from search_funcs import hamming_distance_cpdef, get_kmers_cpdef, get_candidates_cpdef
 
 # @profile
 def hamming_distance(seq1, seq2, limit=0):
@@ -213,7 +221,7 @@ def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed):
             # scores[this_bc] = score
             if this_bc != "no_match":
                 #dist = subglobal_distance(this_bc, seq)
-                dist = hamming_distance(this_bc, seq)
+                dist = hamming_distance_cpdef(this_bc, seq)
                 dists[this_bc] = dist
 
         # Find the best score
@@ -422,20 +430,25 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
             assigned_reads = 0
 
 
+            reads_dict = {}
             for read in InputFiles(infiles).open():
+                og_read = copy.copy(read)
                 reads_written += 1
                 #umi = ""
-                
+                                # /# demultiplex at the 5' end ###
+                read.name = read.name.replace(" ", "").replace("/", "").replace("\\",
+                                                                                "")  # remove bad characters
+                              
                 read = user_trim(read, [(10,24),(34,50)])
+                
+                
                 # trim_sequences = [(30, 34), (80, 88), (90, 100)]
                 trim_sequences = self._trim_sequences
                 if trim_sequences:
                     read = user_trim(read, trim_sequences)
                 
-                
-                # /# demultiplex at the 5' end ###
-                read.name = read.name.replace(" ", "").replace("/", "").replace("\\",
-                                                                                "")  # remove bad characters
+                reads_dict.update({read.sequence: og_read})  
+
 
                 #print(read)
                 read, five_p_bc = five_p_demulti(read,
@@ -499,7 +512,8 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                             save_name=self._save_name,
                             #demulti_type=demulti_type,
                             worker_id=self._id,
-                            reads=this_buffer_list)
+                            reads=this_buffer_list,
+                            reads_dict=reads_dict)
                             #ultra_mode=self._ultra_mode,
                             #ignore_no_match=self._ignore_no_match)
             
@@ -520,7 +534,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
             new_total = prev_total + assigned_reads
             self._total_reads_assigned.put(new_total)
 # @profile
-def write_temp_files(output_dir, save_name, worker_id, reads):
+def write_temp_files(output_dir, save_name, worker_id, reads, reads_dict):
     # write_this = True  # assume true
     # if "no_match" in demulti_type and ignore_no_match:
     #     write_this = False
@@ -579,10 +593,11 @@ def write_temp_files(output_dir, save_name, worker_id, reads):
         #     assert len(read.name.split("rbc:")[1]) == umi_l, "UMIs are different lengths"
         #     ## combine into a single list
         for read in reads:
+            realread = reads_dict[read.sequence]
             this_out.append("@" + read.name)
-            this_out.append(read.sequence)
+            this_out.append(realread.sequence)
             this_out.append("+")
-            this_out.append(read.qualities)
+            this_out.append(realread.qualities)
 
         output = '\n'.join(this_out) + '\n'
         file.write(output.encode())
@@ -843,7 +858,7 @@ def get_candidates(sequence, kmers_dict):
     # NOTE probably faster to keep kmer_offsets in memory as we will call
     #      this function several times with the same barcode but we get a penalty in memory use
 
-    k=2
+    k=int(2)
     sequence_kmers = get_kmers(sequence,k)
     pool = {}
     for key in sequence_kmers:
@@ -1061,6 +1076,12 @@ def concatenate_files(save_name, ultra_mode,
                       sbatch_compression,
                       output_directory,
                       compression_threads=8):
+    print("concat ran")
+    print(save_name)
+    print(ultra_mode)
+    print(sbatch_compression)
+    print(output_directory)
+    print(compression_threads)
     """
 	this function concatenates all the files produced by the 
 	different workers, then sends an sbatch command to compress
@@ -1076,12 +1097,14 @@ def concatenate_files(save_name, ultra_mode,
         if this_type not in all_types:
             all_types.append(this_type)  # this_type contains directory if applicable
 
+    print(all_types)
     # now concatenate them
     if ultra_mode:
         for this_type in all_types:
             # find all files with this barcode (or barcode combination)
             filenames = sorted(glob.glob(this_type + '*'))  # this type already has output directory
             # then concatenate
+            print(filenames)
             command = ''
             for name in filenames:
                 command = command + name + ' '
@@ -1120,19 +1143,27 @@ def concatenate_files(save_name, ultra_mode,
                 else:
                     time.sleep(1)
     else:  # if not ultra_mode
+        
+        temp_file_prefix = sorted(all_types)[0].split(".", 1)[0][:-1]
+
         for this_type in all_types:
             # find all files with this barcode (or barcode combination)
+            #filenames = sorted(glob.glob(this_type + '*'))
             filenames = sorted(glob.glob(this_type + '*'))
+
             # then concatenate
             command = ''
             for name in filenames:
                 command = command + name + ' '
             command = 'cat ' + command + ' > ' + this_type + '.fastq.gz'
+            #print(command)
             os.system(command)
 
             for name in filenames:
                 os.remove(name)
-
+    command = 'cat ' + temp_file_prefix + '*' ' > ' + save_name + '.fastq.gz'        
+    os.system(command)
+    
 # @profile
 def clean_files(output_directory, save_name):
     files = glob.glob(output_directory + 'ultraplex_' + save_name + '*')
