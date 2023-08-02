@@ -440,6 +440,7 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                                                                                 "")  # remove bad characters
                               
                 read = user_trim(read, [(10,24),(34,50)])
+                #read = user_trim(read,[(19,27)])
                 
                 
                 # trim_sequences = [(30, 34), (80, 88), (90, 100)]
