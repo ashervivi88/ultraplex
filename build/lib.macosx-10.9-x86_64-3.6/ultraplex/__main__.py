@@ -105,6 +105,20 @@ def user_trim(read, trim_sequences):
         prev_end = end
     return read
 
+def extract_barcodes(read, first_idx, second_idx, barcode_length):
+    """Simply helper function to get barcodes only"""
+    
+    # if len(read.sequence) < barcode_length*2 or len(read.sequence) < second_idx + barcode_length:
+    #     raise ValueError("Invalid barcode length given " \
+    #                      "The number of positions given mus fit into the read length.")
+
+    first_end = first_idx+barcode_length
+    second_end = second_idx+barcode_length
+    read.sequence = read.sequence[first_idx:first_end] + read.sequence[second_idx:second_end]
+    read.qualities = read.qualities[first_idx:first_end] + read.qualities[second_idx:second_end]
+
+    return read
+
 def round_sig(x, sig=2):
     try:
         to_return = round(x, sig - int(floor(log10(abs(x)))) - 1)
@@ -376,7 +390,10 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                  ignore_no_match,
                  dont_build_reference,
                  trim_sequences,
-                 kmers_dict):
+                 kmers_dict,
+                 first_idx,
+                 second_idx,
+                 barcode_length):
         
         super().__init__()
         self._id = index  # the worker id
@@ -399,6 +416,9 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
         self._trim_sequences = trim_sequences
         self._kmers_dict = kmers_dict
         self._coordinates = coordinates
+        self._first_idx = first_idx
+        self._second_idx = second_idx
+        self._barcode_length = barcode_length
 
     # @profile
     def run(self):
@@ -442,7 +462,14 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                 #                                                                 "")  # remove bad characters
                               
                 #read = user_trim(read, [(10,24),(34,50)])
-                read = user_trim(read,[(18,31)])
+                first_idx = self._first_idx
+                second_idx = self._second_idx
+                barcode_length = self._barcode_length
+                # print(first_idx)
+                # print(second_idx)
+                # print(barcode_length)
+                
+                read = extract_barcodes(read, first_idx, second_idx, barcode_length)
                 
                 
                 # trim_sequences = [(30, 34), (80, 88), (90, 100)]
@@ -1037,7 +1064,7 @@ def start_workers(n_workers, input_file, need_work_queue, #adapter,
                   ultra_mode, output_directory, #final_min_length, q5, i2, adapter2, min_trim,
                   ignore_no_match, dont_build_reference, #keep_barcode, trim_sequences):
                   trim_sequences,
-                  kmers_dict,buffer_size):
+                  kmers_dict, buffer_size, first_idx, second_idx, barcode_length):
     """
 	This function starts all the workers
 	"""
@@ -1068,7 +1095,10 @@ def start_workers(n_workers, input_file, need_work_queue, #adapter,
                                ignore_no_match=ignore_no_match,
                                dont_build_reference=dont_build_reference,
                                trim_sequences=trim_sequences,
-                               kmers_dict=kmers_dict
+                               kmers_dict=kmers_dict,
+                               first_idx=first_idx,
+                               second_idx=second_idx,
+                               barcode_length=barcode_length
                                )
 
         worker.start()
@@ -1284,12 +1314,20 @@ def main(buffer_size=int(50 * 1024 ** 1)):  # 4 MB
                            help="Do not write reads for which there is no match.")
     optional.add_argument("-dbr", "--dont_build_reference", default=False, action="store_true",
                           help="Skip the reference building step - for long barcodes this will improve speed.")
-    optional.add_argument("-ts","--trim-sequences", type=int, default=None, nargs='+', 
+    optional.add_argument("-ts","--trim_sequences", type=int, default=None, nargs='+', 
                         help="Trims from the barcodes in the input file\n" \
                         "The bases given in the list of tuples as START END START END .. where\n" \
                         "START is the integer position of the first base (0 based) and END is the integer\n" \
                         "position of the last base.\nTrimmng sequences can be given several times.")
+    
+    optional.add_argument("-fbi","--first_barcode_index", type=int, default=0, nargs='?', 
+                        help="Start index of the first barcode in sequence (index from 0).")
+    optional.add_argument("-sbi","--second_barcode_index", type=int, default=24, nargs='?', 
+                        help="Start index of the second barcode in sequence (index from 0).")
+    optional.add_argument("-bl","--barcode_length", type=int, default=10, 
+                        help="length of each x and y barcodes")
 
+    
     parser._action_groups.append(optional)
     args = parser.parse_args()
 
@@ -1321,6 +1359,9 @@ def main(buffer_size=int(50 * 1024 ** 1)):  # 4 MB
     ignore_no_match = args.ignore_no_match
     dont_build_reference = args.dont_build_reference
     buffer_size = args.buffersize * 1024
+    first_idx = args.first_barcode_index
+    second_idx = args.second_barcode_index
+    barcode_length = args.barcode_length
 
     if ultra_mode:
         print("Warning - ultra mode selected. This will generate very large temporary files!")
@@ -1392,7 +1433,10 @@ def main(buffer_size=int(50 * 1024 ** 1)):  # 4 MB
                                                     dont_build_reference=dont_build_reference,
                                                     trim_sequences=trim_sequences,
                                                     kmers_dict=kmers_dict,
-                                                    buffer_size=buffer_size)
+                                                    buffer_size=buffer_size,
+                                                    first_idx=first_idx,
+                                                    second_idx=second_idx,
+                                                    barcode_length=barcode_length)
     
     print("Demultiplexing...")
     reader_process = ReaderProcess(file_name, all_conn_w,

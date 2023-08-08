@@ -1,0 +1,3 @@
+2023-08-08 16:43:03,456 INFO     Namespace(barcode_length=9, barcodes='/Users/akim/Desktop/1000L2_barcodes.tsv', buffersize=50, directory='', dont_build_reference=True, first_barcode_index=0, fiveprimemismatches=1, ignore_no_match=False, ignore_space_warning=False, inputfastq='/Users/akim/Desktop/testdata_R1.fastq.gz', outputprefix='st_test_trimmed', sbatchcompression=False, second_barcode_index=9, threads=2, trim_sequences=None, ultra=False)
+2023-08-08 16:43:32,420 INFO     Demultiplexing complete! 100000 reads processed in 28.0 seconds
+2023-08-08 16:43:32,422 INFO     0 (0%) reads correctly assigned to sample files
