@@ -118,7 +118,7 @@ def make_5p_bc_dict(barcodes, min_score, dont_build_reference):
 	this function generates a dictionary that matches each possible sequence
 	from the read with the best 5' barcode
 	"""
-    max_edit_distance = 8
+    max_edit_distance = 2
     if dont_build_reference:
         return {"dont_build": True}
     else:
@@ -205,6 +205,7 @@ def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed):
 	this function scores a given sequence against all the barcodes. It returns the winner with Ns included.
 	"""
 
+    winner = "no_match"
     if seq in barcodes:  # no need to check all barcodes
         winner = seq  # barcode WITH Ns included
     # elif min_score == len(barcodes_no_N):  # i.e. no matches allowed, and seq not in barcodes
@@ -225,19 +226,20 @@ def score_barcode_for_dict(seq, barcodes, max_edit_distance, Ns_removed):
                 dists[this_bc] = dist
 
         # Find the best score
-        min_dist = min(dists.values())
+        if dists:
+            min_dist = min(dists.values())
 
-        if min_dist > max_edit_distance:
-            winner = "no_match"
-        else:
-            # check that there is only one barcode with the max score
-            filtered = [a for a, b in dists.items() if b == min_dist]
-            # if len(filtered) > 1:
-            #     winner = "no_match-ambiguous" #need to decide how to fix the multiple matches situation
-            # else:  # if there is only one
-            #     winner = barcodes[filtered[0]]  # barcode WITH Ns included
-            #print(dists)
-            winner = filtered[0]  # barcode WITH Ns included
+            if min_dist > max_edit_distance:
+                winner = "no_match"
+            else:
+                # check that there is only one barcode with the max score
+                filtered = [a for a, b in dists.items() if b == min_dist]
+                # if len(filtered) > 1:
+                #     winner = "no_match-ambiguous" #need to decide how to fix the multiple matches situation
+                # else:  # if there is only one
+                #     winner = barcodes[filtered[0]]  # barcode WITH Ns included
+                #print(dists)
+                winner = filtered[0]  # barcode WITH Ns included
     #     print(min_dist)
     # print(seq)
     # print(winner)
@@ -436,11 +438,11 @@ class WorkerProcess(Process):  # /# have to have "Process" here to enable worker
                 reads_written += 1
                 #umi = ""
                                 # /# demultiplex at the 5' end ###
-                read.name = read.name.replace(" ", "").replace("/", "").replace("\\",
-                                                                                "")  # remove bad characters
+                # read.name = read.name.replace(" ", "").replace("/", "").replace("\\",
+                #                                                                 "")  # remove bad characters
                               
-                read = user_trim(read, [(10,24),(34,50)])
-                #read = user_trim(read,[(19,27)])
+                #read = user_trim(read, [(10,24),(34,50)])
+                read = user_trim(read,[(18,31)])
                 
                 
                 # trim_sequences = [(30, 34), (80, 88), (90, 100)]
@@ -862,6 +864,7 @@ def get_candidates(sequence, kmers_dict):
     k=int(2)
     sequence_kmers = get_kmers(sequence,k)
     pool = {}
+    unique_barcode_set = set()
     for key in sequence_kmers:
         kmer_len = key[0]
         nt = key[1]
@@ -897,7 +900,7 @@ def get_candidates(sequence, kmers_dict):
         for lst in pool.values():
             unique_barcode_set.update(lst)
         # end = time.time()
-        # print(end - start)
+        # print(end - start) 
         #print(len(unique_barcode_set))
     return list(unique_barcode_set)
 
@@ -987,6 +990,7 @@ def five_p_demulti(read, kmers_dict, barcodes_no_N=[], min_score=0):
     this function demultiplexes on the 5' end
     """
     sequence_length = len(read.sequence)
+    #print(sequence_length)
     candidates = get_candidates(read.sequence, kmers_dict)
     #print(read.sequence)
     winner = score_barcode_for_dict(read.sequence, candidates, min_score, Ns_removed=True)
@@ -1145,8 +1149,10 @@ def concatenate_files(save_name, ultra_mode,
                     time.sleep(1)
     else:  # if not ultra_mode
         
+        #temp_file_prefix = sorted(all_types)[0].split(".", 1)[0][:-1]
         temp_file_prefix = sorted(all_types)[0].split(".", 1)[0][:-1]
-
+        print(sorted(all_types)[0].split(".", 1)[0])
+        
         for this_type in all_types:
             # find all files with this barcode (or barcode combination)
             #filenames = sorted(glob.glob(this_type + '*'))

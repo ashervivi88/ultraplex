@@ -1,0 +1,3 @@
+2023-08-02 16:44:13,688 INFO     Namespace(barcodes='/Users/akim/Desktop/1000L2_barcodes.tsv', buffersize=50, directory='', dont_build_reference=True, fiveprimemismatches=1, ignore_no_match=False, ignore_space_warning=False, inputfastq='/Users/akim/Desktop/testdata_R1.fastq.gz', outputprefix='pipeline_test2', sbatchcompression=False, threads=1, trim_sequences=None, ultra=False)
+2023-08-02 16:45:21,476 INFO     Demultiplexing complete! 5746 reads processed in 67.0 seconds
+2023-08-02 16:45:21,480 INFO     0 (0%) reads correctly assigned to sample files

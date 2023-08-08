@@ -1,0 +1,1 @@
+2023-08-02 17:02:19,563 INFO     Namespace(barcodes='/Users/akim/Desktop/1000L2_barcodes.tsv', buffersize=50, directory='', dont_build_reference=True, fiveprimemismatches=1, ignore_no_match=False, ignore_space_warning=False, inputfastq='/Users/akim/Desktop/testdata_R1.fastq.gz', outputprefix='pipeline_test2', sbatchcompression=False, threads=1, trim_sequences=None, ultra=False)
